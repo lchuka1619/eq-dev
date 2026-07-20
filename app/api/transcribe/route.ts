@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 
 type TranscribeRequest = { audio?: string; mimeType?: string };
 
+function looksHallucinated(text: string) {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  const words = cleaned.toLocaleLowerCase("mn-MN").match(/[а-яөүё]+/gi) ?? [];
+  if (cleaned.includes("[ТОДОРХОЙГҮЙ]") || cleaned.length > 320) return true;
+  if (words.length < 24) return false;
+  return new Set(words).size / words.length < 0.48;
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "gemini_not_configured" }, { status: 503 });
@@ -18,10 +26,10 @@ export async function POST(request: Request) {
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           contents: [{ parts: [
-            { text: "Энэ аудион дахь Монгол яриаг яг хэлснээр нь кирилл Монгол текст болгон буулга. Зөвхөн transcript бич. Орчуулахгүй, тайлбар нэмэхгүй." },
+            { text: "12 секундээс богино энэ аудион дахь Монгол яриаг үгчлэн кириллээр буулга. Зөвхөн сонсогдсон үгийг бич. Сэдэв, өгүүлбэр, нэр томьёо огт таамаглаж зохиож болохгүй. Давталт нэмж болохгүй. Яриа тодорхой сонсогдохгүй эсвэл зөвхөн чимээ байвал яг [ТОДОРХОЙГҮЙ] гэж хариул. Зөвхөн transcript бич; тайлбар, орчуулга бүү нэм." },
             { inlineData: { mimeType: body.mimeType || "audio/webm", data: body.audio } },
           ] }],
-          generationConfig: { thinkingConfig: { thinkingBudget: 0 }, temperature: 0, maxOutputTokens: 300 },
+          generationConfig: { thinkingConfig: { thinkingBudget: 0 }, temperature: 0, maxOutputTokens: 120 },
         }),
         signal: AbortSignal.timeout(20000),
       },
@@ -33,7 +41,10 @@ export async function POST(request: Request) {
     const data = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     const transcript = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     if (!transcript) return NextResponse.json({ error: "empty_transcript" }, { status: 502 });
-    return NextResponse.json({ transcript: transcript.slice(0, 800) });
+    if (looksHallucinated(transcript)) {
+      return NextResponse.json({ error: "unclear_audio" }, { status: 422 });
+    }
+    return NextResponse.json({ transcript: transcript.slice(0, 320) });
   } catch (error) {
     console.error("Transcription processing failed", error instanceof Error ? error.message : "unknown");
     return NextResponse.json({ error: "transcription_failed" }, { status: 502 });
