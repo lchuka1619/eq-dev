@@ -12,19 +12,6 @@ type MicroLesson = {
   placeholder: string;
   keywords: string[];
 };
-type SpeechResultEvent = { results: { [index: number]: { [index: number]: { transcript: string } } } };
-type SpeechRecognitionLike = {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: SpeechResultEvent) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-};
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
-
 type Progress = {
   completedDates: string[];
   sessions: number;
@@ -276,8 +263,11 @@ export default function Home() {
   const [feedbackSource, setFeedbackSource] = useState<"gemini" | "simulation">("simulation");
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [micMessage, setMicMessage] = useState("");
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
 
   const exercise = exercises[exerciseIndex];
   const lesson = microLessons[lessonIndex];
@@ -346,43 +336,80 @@ export default function Home() {
     document.getElementById("voice-coach")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const playCoachLine = () => {
+  const playCoachLine = async () => {
     setVoicePhase("respond");
-    if (!("speechSynthesis" in window)) {
-      setMicMessage("Дуугаар унших боломжгүй байна. Дээрх өгүүлбэрийг уншаад хариулаарай.");
-      return;
+    setIsSpeaking(true);
+    setMicMessage("Монгол аудиог бэлдэж байна…");
+    try {
+      const response = await fetch("/api/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: coachLine }),
+      });
+      if (!response.ok) throw new Error("tts_unavailable");
+      const data = await response.json() as { audio?: string; mimeType?: string };
+      if (!data.audio) throw new Error("empty_audio");
+      const audio = new Audio(`data:${data.mimeType ?? "audio/wav"};base64,${data.audio}`);
+      audio.onended = () => setIsSpeaking(false);
+      audio.onerror = () => setIsSpeaking(false);
+      setMicMessage("");
+      await audio.play();
+    } catch {
+      setIsSpeaking(false);
+      setMicMessage("Аудио тоглуулж чадсангүй. Өгүүлбэрийг уншаад хариулаарай.");
     }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(coachLine);
-    utterance.lang = "mn-MN";
-    utterance.rate = 0.86;
-    window.speechSynthesis.speak(utterance);
   };
 
-  const startListening = () => {
-    const speechWindow = window as unknown as {
-      SpeechRecognition?: SpeechRecognitionConstructor;
-      webkitSpeechRecognition?: SpeechRecognitionConstructor;
-    };
-    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
-    if (!Recognition) {
-      setMicMessage("Энэ хөтөч микрофоноор үг танихгүй байна. Доорх талбарт бичиж хариулаарай.");
+  const startListening = async () => {
+    if (isListening) {
+      recorderRef.current?.stop();
       return;
     }
-    const recognition = new Recognition();
-    recognitionRef.current = recognition;
-    recognition.lang = "mn-MN";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onresult = (event) => {
-      setVoiceResponse(event.results[0][0].transcript);
-      setMicMessage("Таны хариултыг буулгалаа. Хянаад илгээнэ үү.");
-    };
-    recognition.onerror = () => setMicMessage("Дууг таньж чадсангүй. Дахин оролдох эсвэл бичиж болно.");
-    recognition.onend = () => setIsListening(false);
-    setMicMessage("Сонсож байна… Нэг эсвэл хоёр өгүүлбэрээр хариулаарай.");
-    setIsListening(true);
-    recognition.start();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recorderRef.current = recorder;
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        setIsListening(false);
+        stream.getTracks().forEach((track) => track.stop());
+        setMicMessage("Gemini таны Монгол яриаг текст болгож байна…");
+        try {
+          const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+          const audio = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result).split(",")[1] ?? "");
+            reader.onerror = () => reject(new Error("audio_read_failed"));
+            reader.readAsDataURL(blob);
+          });
+          const response = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audio, mimeType: blob.type }),
+          });
+          if (!response.ok) throw new Error("transcription_failed");
+          const data = await response.json() as { transcript?: string };
+          if (!data.transcript) throw new Error("empty_transcript");
+          setVoiceResponse(data.transcript);
+          setMicMessage("Таны яриаг буулгалаа. Хянаад илгээнэ үү.");
+        } catch {
+          setMicMessage("Яриаг текст болгож чадсангүй. Дахин оролдох эсвэл бичиж болно.");
+        }
+      };
+      recorder.start();
+      setIsListening(true);
+      setMicMessage("Сонсож байна… Дуусахдаа товчийг дахин дарна уу.");
+      window.setTimeout(() => {
+        if (recorder.state === "recording") recorder.stop();
+      }, 12000);
+    } catch {
+      setMicMessage("Микрофоны зөвшөөрөл хэрэгтэй. Эсвэл доорх талбарт бичиж болно.");
+    }
   };
 
   const submitVoiceResponse = async () => {
@@ -439,7 +466,8 @@ export default function Home() {
   };
 
   const resetVoiceCoach = () => {
-    recognitionRef.current?.stop();
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    audioStreamRef.current?.getTracks().forEach((track) => track.stop());
     setVoicePhase("ready");
     setVoiceResponse("");
     setFirstVoiceResponse("");
@@ -603,7 +631,7 @@ export default function Home() {
                   <p className="small-label">{lesson.skill} · 1 МИНУТ</p>
                   <h3>{lesson.title}</h3>
                   <p>Бэлэн болмогц богино яриаг сонсоно. Тэмдэглэл хийх шаардлагагүй.</p>
-                  <button className="primary-button" onClick={playCoachLine}>▶ Яриаг сонсох</button>
+                  <button className="primary-button" onClick={playCoachLine} disabled={isSpeaking}>{isSpeaking ? "Аудио бэлдэж байна…" : "▶ Монгол яриаг сонсох"}</button>
                   <div className="lesson-picker" aria-label="7 өдрийн микро дасгал">
                     {microLessons.map((item, index) => (
                       <button type="button" className={lessonIndex === index ? "active" : ""} onClick={() => chooseLesson(index)} aria-label={`${index + 1}-р дасгал: ${item.title}`} key={item.title}>
@@ -620,12 +648,12 @@ export default function Home() {
                   <div className="coach-bubble">
                     <span>ДАСГАЛЖУУЛАГЧ</span>
                     <p>“{coachLine}”</p>
-                    <button type="button" onClick={playCoachLine}>↻ Дахин сонсох</button>
+                    <button type="button" onClick={playCoachLine} disabled={isSpeaking}>{isSpeaking ? "Аудио бэлдэж байна…" : "↻ Дахин сонсох"}</button>
                   </div>
                   <p className="response-prompt">Та юу гэж хариулах вэ?</p>
                   <div className="response-actions">
-                    <button className={`mic-button ${isListening ? "listening" : ""}`} type="button" onClick={startListening} disabled={isListening}>
-                      <span>●</span>{isListening ? "Сонсож байна…" : "Микрофоноор хариулах"}
+                    <button className={`mic-button ${isListening ? "listening" : ""}`} type="button" onClick={startListening}>
+                      <span>●</span>{isListening ? "Дуусгах" : "Микрофоноор хариулах"}
                     </button>
                     <span>эсвэл</span>
                   </div>
