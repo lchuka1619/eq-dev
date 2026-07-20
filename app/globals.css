@@ -160,6 +160,10 @@ svg { width: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-li
 .voice-intro h3, .voice-complete h3 { margin: 7px 0 13px; font-size: 32px; letter-spacing: -.04em; }
 .voice-intro > p:not(.small-label), .voice-complete > p:not(.small-label) { color: var(--muted); line-height: 1.65; }
 .voice-intro .primary-button { margin: 24px auto 0; }
+.lesson-picker { display: flex; justify-content: center; gap: 8px; margin-top: 27px; }
+.lesson-picker button { width: 34px; height: 34px; border: 1px solid #cbd8d2; border-radius: 50%; color: var(--teal); background: #fff; font-size: 12px; font-weight: 760; cursor: pointer; transition: .18s ease; }
+.lesson-picker button:hover, .lesson-picker button.active { color: #fff; background: var(--teal); border-color: var(--teal); transform: translateY(-2px); }
+.lesson-count { display: block; margin-top: 10px; color: var(--muted); font-size: 10px; letter-spacing: .04em; }
 .voice-response, .voice-feedback { width: min(700px, 100%); margin: 28px auto 0; }
 .coach-bubble { padding: 20px 22px; border-radius: 8px 19px 19px; background: #e1eee8; }
 .coach-bubble span { color: var(--teal-bright); font-size: 9px; font-weight: 800; letter-spacing: .14em; }
@@ -184,6 +188,7 @@ svg { width: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-li
 .feedback-source.gemini { color: #19584f; background: #e2f0ea; }
 .voice-feedback .primary-button { margin-top: 18px; }
 .voice-complete > span { width: 72px; height: 72px; margin: 0 auto 20px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--teal); font-size: 30px; }
+.voice-complete .next-lesson { margin: 12px auto 0; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(229,142,115,.15); } }
 .exercise-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .exercise-chip { min-height: 142px; padding: 20px; border: 1px solid var(--border); border-radius: 18px; background: #fff; color: var(--ink); text-align: left; cursor: pointer; display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto; gap: 6px 14px; transition: transform .18s, border .18s, box-shadow .18s; }
