@@ -265,6 +265,7 @@ export default function Home() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [micMessage, setMicMessage] = useState("");
+  const [transcriptRating, setTranscriptRating] = useState<"yes" | "no" | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -273,6 +274,7 @@ export default function Home() {
   const lesson = microLessons[lessonIndex];
   const coachLine = lesson.line;
   const streak = calculateStreak(progress.completedDates);
+  const xp = progress.sessions * 10;
 
   useEffect(() => {
     try {
@@ -402,6 +404,7 @@ export default function Home() {
           const data = await response.json() as { transcript?: string };
           if (!data.transcript) throw new Error("empty_transcript");
           setVoiceResponse(data.transcript);
+          setTranscriptRating(null);
           setMicMessage("Таны яриаг буулгалаа. Хянаад илгээнэ үү.");
         } catch (error) {
           setMicMessage(error instanceof Error && error.message === "unclear_audio"
@@ -470,6 +473,7 @@ export default function Home() {
   const beginRetry = () => {
     setVoiceResponse("");
     setMicMessage("");
+    setTranscriptRating(null);
     setVoicePhase("retry");
   };
 
@@ -483,6 +487,7 @@ export default function Home() {
     setFeedbackSource("simulation");
     setFeedbackLoading(false);
     setMicMessage("");
+    setTranscriptRating(null);
   };
 
   const chooseLesson = (index: number) => {
@@ -625,12 +630,16 @@ export default function Home() {
             <ol className="voice-path" aria-label="Дасгалын алхам">
               <li className={voicePhase !== "ready" ? "done" : "active"}><b>1</b><span>Сонсох<small>Нэг богино өгүүлбэр</small></span></li>
               <li className={["feedback", "retry", "complete"].includes(voicePhase) ? "done" : voicePhase === "respond" ? "active" : ""}><b>2</b><span>Хариулах<small>1–2 өгүүлбэр</small></span></li>
-              <li className={voicePhase === "complete" ? "done" : voicePhase === "retry" ? "active" : ""}><b>3</b><span>Дахин хэлэх<small>Нэг сайжруулалт</small></span></li>
+              <li className={["retry", "complete"].includes(voicePhase) ? "done" : voicePhase === "feedback" ? "active" : ""}><b>3</b><span>Зөвлөгөө<small>Ганц сайжруулалт</small></span></li>
+              <li className={voicePhase === "complete" ? "done" : voicePhase === "retry" ? "active" : ""}><b>4</b><span>Дахин хэлэх<small>Нэг удаагийн давталт</small></span></li>
             </ol>
 
             <article className="voice-stage" aria-live="polite">
               <div className={`simulation-badge ${feedbackSource === "gemini" ? "connected" : ""}`}>
                 <i /> {feedbackSource === "gemini" ? "Gemini AI · холбогдсон" : "Gemini бэлэн · fallback хамгаалалттай"}
+              </div>
+              <div className="lesson-status" aria-label="Дасгалын оноо">
+                <span>Өдөр {lessonIndex + 1}/7</span><b>{xp} XP</b><span>🔥 {streak} өдөр</span>
               </div>
 
               {voicePhase === "ready" && (
@@ -668,6 +677,13 @@ export default function Home() {
                   <label htmlFor="voice-response">Хариултаа бичих</label>
                   <textarea id="voice-response" rows={3} value={voiceResponse} onChange={(event) => setVoiceResponse(event.target.value)} placeholder={`Жишээ: ${lesson.placeholder}`} />
                   {micMessage && <p className="mic-message">{micMessage}</p>}
+                  {voiceResponse && micMessage.includes("буулгалаа") && (
+                    <div className="transcript-check">
+                      <span>Энэ хөрвүүлэлт зөв үү?</span>
+                      <button type="button" className={transcriptRating === "yes" ? "active" : ""} onClick={() => setTranscriptRating("yes")}>Тийм</button>
+                      <button type="button" className={transcriptRating === "no" ? "active no" : ""} onClick={() => { setTranscriptRating("no"); setMicMessage("Зөрүүтэй үгийг засаад илгээх эсвэл микрофоноор дахин хэлээрэй."); }}>Үгүй</button>
+                    </div>
+                  )}
                   <button className="primary-button" disabled={!voiceResponse.trim() || feedbackLoading} onClick={submitVoiceResponse}>
                     {feedbackLoading ? "AI үнэлж байна…" : voicePhase === "retry" ? "Дахин хэлснээ дуусгах" : "Хариултаа шалгах"} {!feedbackLoading && <IconArrow />}
                   </button>
@@ -692,6 +708,7 @@ export default function Home() {
                   <span>✓</span>
                   <p className="small-label">1 МИНУТЫН ДАСГАЛ ДУУСЛАА</p>
                   <h3>Өнөөдрийн жижиг ялалт.</h3>
+                  <div className="xp-reward"><b>+10 XP</b><span>Нийт {xp} XP · 🔥 {streak} өдрийн дараалал</span></div>
                   <p>Та сонсож, хариулж, зөвлөгөөг ашиглан дахин хэллээ. Энэ бол бодит ярианд шилжих хамгийн богино давталт.</p>
                   <button className="text-button" onClick={resetVoiceCoach}>Дахин хийх <IconArrow /></button>
                   <button className="primary-button next-lesson" onClick={() => chooseLesson((lessonIndex + 1) % microLessons.length)}>Дараагийн lesson <IconArrow /></button>
