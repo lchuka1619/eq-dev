@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type VoicePhase = "ready" | "respond" | "feedback" | "retry" | "complete";
+type ArenaPhase = "idle" | "checkin" | "brief" | "scene" | "complete";
+type ArenaCompletion = "completed" | "safe-finish";
+type ArenaAttemptPhase = "respond" | "feedback" | "retry" | "retry-feedback";
 type VoiceFeedback = { positive: string; improve: string };
 type MicroLesson = {
   skill: string;
@@ -16,6 +19,38 @@ type Progress = {
   completedDates: string[];
   sessions: number;
   lastRating: number;
+};
+type ArenaSessionRecord = {
+  id: string;
+  date: string;
+  completion: ArenaCompletion;
+  level: number;
+  repetitions: number;
+  xp: number;
+  intensityBefore: number;
+  intensityAfter: number;
+  reflection: string;
+};
+type BetaEventName = "arena_started" | "scene_audio_played" | "response_recorded" | "transcript_confirmed" | "feedback_shown" | "retry_completed" | "control_used" | "arena_completed" | "beta_feedback_submitted";
+type BetaEvent = {
+  id: string;
+  name: BetaEventName;
+  createdAt: string;
+  sessionId: string;
+  properties: Record<string, string | number | boolean | null>;
+};
+type ArenaProgress = {
+  sessions: number;
+  meaningfulRepetitions: number;
+  recoveryStrength: number;
+  xp: number;
+  highestLevel: number;
+  practicedDates: string[];
+  recoveryDates: string[];
+  lastIntensityBefore: number;
+  lastIntensityAfter: number;
+  lastCompletion: ArenaCompletion | null;
+  history: ArenaSessionRecord[];
 };
 
 type RoleOption = {
@@ -32,6 +67,15 @@ type Scenario = {
   counterpart: string;
   prompt: string;
   options: RoleOption[];
+};
+
+type ArenaBeat = {
+  speaker: string;
+  tone: string;
+  line: string;
+  prompt: string;
+  hint: string;
+  responses: string[];
 };
 
 const exercises = [
@@ -139,10 +183,69 @@ const scenarios: Scenario[] = [
   },
 ];
 
+const arenaLevels = [
+  { level: 1, name: "Хөтлүүлсэн", detail: "Бэлэн хариу, тайван хэмнэл" },
+  { level: 2, name: "Санамжтай", detail: "Өгүүлбэрийн эхлэл, нэг follow-up" },
+  { level: 3, name: "Бага зэрэг гэнэтийн", detail: "Нэрээр дуудах, сэдэв солих" },
+];
+
+const teamLunchBeats: ArenaBeat[] = [
+  {
+    speaker: "Сараа",
+    tone: "Найрсаг хамтрагч",
+    line: "Сайн уу, энд суу. Өглөөний ажил ямар байв?",
+    prompt: "Мэндлээд нэг л баримт нэмээрэй.",
+    hint: "Төгс сонирхолтой хариу хэрэггүй. ‘Сайн, баярлалаа. Өглөө …’ гэж эхэлж болно.",
+    responses: [
+      "Сайн, баярлалаа. Өглөө тайлангаа дуусгалаа.",
+      "Сайн уу. Жаахан завгүй байсан ч одоо гайгүй.",
+      "Сайн. Та нарын өглөө ямар байв?",
+    ],
+  },
+  {
+    speaker: "Тэмүүлэн",
+    tone: "Хурдан ярьдаг хамтрагч",
+    line: "Өнөөдөр манай талд нэлээд завгүй байна аа.",
+    prompt: "Өмнөх өгүүлбэрээс нэг холбоос аваарай.",
+    hint: "Нээлттэй асуулт хамгийн амархан гүүр болно: ‘Яг аль ажил нь хамгийн их завгүй байна?’",
+    responses: [
+      "Яг аль ажил нь хамгийн их завгүй байна?",
+      "Манай талд ч бас адилхан байна. Танай deadline хэзээ вэ?",
+      "Тэгвэл өдрийн хоол жаахан амралт болж байна уу?",
+    ],
+  },
+  {
+    speaker: "Болд",
+    tone: "Багийн ахлах",
+    line: "Чи өнөөдөр их чимээгүй байна. Бүх зүйл зүгээр үү?",
+    prompt: "Тайлбар ихгүйгээр тайван хариулаад, яриаг буцааж холбоорой.",
+    hint: "Recovery: ‘Зүгээр ээ, эхлээд сонсоод сууж байлаа.’ Дараа нь нэг асуулт нэмж болно.",
+    responses: [
+      "Зүгээр ээ, эхлээд сонсоод сууж байлаа.",
+      "Бүх зүйл зүгээр. Та нарын яриаг сонсож байлаа.",
+      "Зүгээр ээ. Өмнөх сэдэв дээр нэг юм нэмэхэд…",
+    ],
+  },
+];
+
 const emptyProgress: Progress = {
   completedDates: [],
   sessions: 0,
   lastRating: 0,
+};
+
+const emptyArenaProgress: ArenaProgress = {
+  sessions: 0,
+  meaningfulRepetitions: 0,
+  recoveryStrength: 0,
+  xp: 0,
+  highestLevel: 0,
+  practicedDates: [],
+  recoveryDates: [],
+  lastIntensityBefore: 0,
+  lastIntensityAfter: 0,
+  lastCompletion: null,
+  history: [],
 };
 
 const defaultVideoId = "aDMtx5ivKK0";
@@ -177,6 +280,23 @@ function evaluateResponse(value: string, lesson: MicroLesson): VoiceFeedback {
       : "Сайн бүтэцтэй байна. Одоо санаагаа нэг өгүүлбэрт илүү товч хэлээрэй.";
 
   return { positive, improve };
+}
+
+function evaluateArenaResponse(value: string, beat: ArenaBeat): VoiceFeedback {
+  const normalized = value.trim().toLocaleLowerCase("mn-MN");
+  const connected = beat.responses.some((example) => {
+    const words = example.toLocaleLowerCase("mn-MN").match(/[а-яөүё]+/gi) ?? [];
+    return words.some((word) => word.length > 4 && normalized.includes(word));
+  });
+  const hasQuestion = /[?？]|(юу|яаж|аль|ямар|хэзээ|хаана)/i.test(normalized);
+  return {
+    positive: connected
+      ? "Та өмнөх яриатай холбоотой, ойлгомжтой нэг өгүүлбэрээр оролцлоо."
+      : "Та дуугүй өнгөрөхийн оронд ярианд оролцох бодит оролдлого хийлээ.",
+    improve: hasQuestion
+      ? "Одоо ижил санаагаа арай товч, тайван хэмнэлээр дахин хэлээрэй."
+      : "Нөгөө хүнд хариулах орон зай өгөх нэг богино асуулт нэмээрэй.",
+  };
 }
 
 function extractYouTubeId(value: string) {
@@ -266,25 +386,76 @@ export default function Home() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [micMessage, setMicMessage] = useState("");
   const [transcriptRating, setTranscriptRating] = useState<"yes" | "no" | null>(null);
+  const [arenaPhase, setArenaPhase] = useState<ArenaPhase>("idle");
+  const [arenaIntensity, setArenaIntensity] = useState(4);
+  const [arenaLevel, setArenaLevel] = useState(1);
+  const [arenaBeat, setArenaBeat] = useState(0);
+  const [arenaPaused, setArenaPaused] = useState(false);
+  const [arenaHintOpen, setArenaHintOpen] = useState(false);
+  const [arenaCompletion, setArenaCompletion] = useState<ArenaCompletion>("completed");
+  const [arenaAttempts, setArenaAttempts] = useState<string[]>([]);
+  const [arenaAttemptPhase, setArenaAttemptPhase] = useState<ArenaAttemptPhase>("respond");
+  const [arenaResponse, setArenaResponse] = useState("");
+  const [arenaFirstResponse, setArenaFirstResponse] = useState("");
+  const [arenaFeedback, setArenaFeedback] = useState<VoiceFeedback | null>(null);
+  const [arenaFeedbackSource, setArenaFeedbackSource] = useState<"gemini" | "simulation">("simulation");
+  const [arenaFeedbackLoading, setArenaFeedbackLoading] = useState(false);
+  const [arenaIsListening, setArenaIsListening] = useState(false);
+  const [arenaIsSpeaking, setArenaIsSpeaking] = useState(false);
+  const [arenaMicMessage, setArenaMicMessage] = useState("");
+  const [arenaTranscriptRating, setArenaTranscriptRating] = useState<"yes" | "no" | null>(null);
+  const [arenaProgress, setArenaProgress] = useState<ArenaProgress>(emptyArenaProgress);
+  const [arenaIntensityAfter, setArenaIntensityAfter] = useState(4);
+  const [arenaReflection, setArenaReflection] = useState("");
+  const [arenaProgressSaved, setArenaProgressSaved] = useState(false);
+  const [anonymousBetaId, setAnonymousBetaId] = useState("");
+  const [arenaSessionId, setArenaSessionId] = useState("");
+  const [betaEvents, setBetaEvents] = useState<BetaEvent[]>([]);
+  const [betaRating, setBetaRating] = useState(0);
+  const [betaIssue, setBetaIssue] = useState("none");
+  const [betaComment, setBetaComment] = useState("");
+  const [betaFeedbackSent, setBetaFeedbackSent] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
+  const arenaRecorderRef = useRef<MediaRecorder | null>(null);
+  const arenaAudioChunksRef = useRef<Blob[]>([]);
+  const arenaAudioStreamRef = useRef<MediaStream | null>(null);
 
   const exercise = exercises[exerciseIndex];
   const lesson = microLessons[lessonIndex];
   const coachLine = lesson.line;
   const streak = calculateStreak(progress.completedDates);
-  const xp = progress.sessions * 10;
+  const xp = progress.sessions * 10 + arenaProgress.xp;
+  const activeArenaBeat = teamLunchBeats[Math.min(arenaBeat, teamLunchBeats.length - 1)];
+  const transcriptEvents = betaEvents.filter((event) => event.name === "transcript_confirmed");
+  const acceptedTranscripts = transcriptEvents.filter((event) => event.properties.accepted === true).length;
+  const sttAcceptanceRate = transcriptEvents.length ? Math.round((acceptedTranscripts / transcriptEvents.length) * 100) : 0;
+  const submittedFeedback = betaEvents.filter((event) => event.name === "beta_feedback_submitted");
+  const averageBetaRating = submittedFeedback.length
+    ? (submittedFeedback.reduce((sum, event) => sum + Number(event.properties.rating ?? 0), 0) / submittedFeedback.length).toFixed(1)
+    : "—";
 
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("hariltsaa-progress-v1");
-      if (saved) setProgress(JSON.parse(saved));
-      const savedVideo = window.localStorage.getItem("hariltsaa-youtube-id-v1");
-      if (savedVideo && /^[a-zA-Z0-9_-]{11}$/.test(savedVideo)) setVideoId(savedVideo);
-    } catch {
-      // The experience still works if browser storage is unavailable.
-    }
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        const saved = window.localStorage.getItem("hariltsaa-progress-v1");
+        if (saved) setProgress(JSON.parse(saved));
+        const savedVideo = window.localStorage.getItem("hariltsaa-youtube-id-v1");
+        if (savedVideo && /^[a-zA-Z0-9_-]{11}$/.test(savedVideo)) setVideoId(savedVideo);
+        const savedArena = window.localStorage.getItem("hariltsaa-arena-progress-v1");
+        if (savedArena) setArenaProgress({ ...emptyArenaProgress, ...JSON.parse(savedArena) });
+        const storedBetaId = window.localStorage.getItem("hariltsaa-beta-id-v1");
+        const betaId = storedBetaId || crypto.randomUUID();
+        setAnonymousBetaId(betaId);
+        if (!storedBetaId) window.localStorage.setItem("hariltsaa-beta-id-v1", betaId);
+        const storedEvents = window.localStorage.getItem("hariltsaa-beta-events-v1");
+        if (storedEvents) setBetaEvents(JSON.parse(storedEvents));
+      } catch {
+        // The experience still works if browser storage is unavailable.
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -323,15 +494,59 @@ export default function Home() {
     });
   }, [progress.completedDates]);
 
-  const startPractice = () => {
-    setPracticeOpen(true);
-    setPracticeStep(0);
-    setSeconds(300);
-    setTimerRunning(false);
-    setRating(0);
-    window.setTimeout(() => {
-      document.getElementById("practice")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
+  const trackBetaEvent = (name: BetaEventName, properties: BetaEvent["properties"] = {}, sessionOverride?: string) => {
+    const betaId = anonymousBetaId || crypto.randomUUID();
+    const sessionId = sessionOverride ?? arenaSessionId;
+    if (!anonymousBetaId) {
+      setAnonymousBetaId(betaId);
+      try { window.localStorage.setItem("hariltsaa-beta-id-v1", betaId); } catch { /* optional */ }
+    }
+    const event: BetaEvent = {
+      id: crypto.randomUUID(),
+      name,
+      createdAt: new Date().toISOString(),
+      sessionId,
+      properties,
+    };
+    setBetaEvents((current) => {
+      const next = [...current, event].slice(-200);
+      try { window.localStorage.setItem("hariltsaa-beta-events-v1", JSON.stringify(next)); } catch { /* optional */ }
+      return next;
+    });
+    void fetch("/api/beta-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: name, anonymousId: betaId, sessionId, properties }),
+      keepalive: true,
+    }).catch(() => undefined);
+  };
+
+  const exportBetaData = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      anonymousId: anonymousBetaId,
+      arenaProgress,
+      events: betaEvents,
+      privacy: "Raw audio and transcripts are not included.",
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `eq-dev-beta-${dateKey()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const submitBetaFeedback = () => {
+    if (!betaRating || betaFeedbackSent) return;
+    trackBetaEvent("beta_feedback_submitted", {
+      rating: betaRating,
+      issue: betaIssue,
+      comment: betaComment.trim().slice(0, 120),
+      completion: arenaCompletion,
+      level: arenaLevel,
+    });
+    setBetaFeedbackSent(true);
   };
 
   const openVoiceCoach = () => {
@@ -497,10 +712,299 @@ export default function Home() {
 
   const chooseExercise = (index: number) => {
     setExerciseIndex(index);
-    setPracticeOpen(false);
+    setPracticeOpen(true);
     setPracticeStep(0);
     setTimerRunning(false);
     setSeconds(300);
+    setRating(0);
+  };
+
+  const openArena = () => {
+    const nextSessionId = crypto.randomUUID();
+    setArenaSessionId(nextSessionId);
+    setArenaPhase("checkin");
+    setArenaBeat(0);
+    setArenaPaused(false);
+    setArenaHintOpen(false);
+    setArenaAttempts([]);
+    setArenaAttemptPhase("respond");
+    setArenaResponse("");
+    setArenaFirstResponse("");
+    setArenaFeedback(null);
+    setArenaFeedbackSource("simulation");
+    setArenaMicMessage("");
+    setArenaTranscriptRating(null);
+    setArenaIntensityAfter(arenaIntensity);
+    setArenaReflection("");
+    setArenaProgressSaved(false);
+    setBetaRating(0);
+    setBetaIssue("none");
+    setBetaComment("");
+    setBetaFeedbackSent(false);
+    window.setTimeout(() => {
+      document.getElementById("arena")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  };
+
+  const chooseArenaIntensity = (value: number) => {
+    setArenaIntensity(value);
+    setArenaLevel(value >= 8 ? 1 : value >= 5 ? Math.min(arenaLevel, 2) : arenaLevel);
+  };
+
+  const startArenaScene = () => {
+    setArenaPhase("scene");
+    setArenaBeat(0);
+    setArenaPaused(false);
+    setArenaHintOpen(false);
+    setArenaAttemptPhase("respond");
+    setArenaResponse("");
+    setArenaFirstResponse("");
+    setArenaFeedback(null);
+    setArenaMicMessage("");
+    setArenaTranscriptRating(null);
+    trackBetaEvent("arena_started", { level: arenaLevel, intensity_before: arenaIntensity, mode: arenaIntensity >= 8 ? "safe" : "standard" });
+  };
+
+  const resetArenaAttempt = () => {
+    setArenaAttemptPhase("respond");
+    setArenaResponse("");
+    setArenaFirstResponse("");
+    setArenaFeedback(null);
+    setArenaFeedbackSource("simulation");
+    setArenaFeedbackLoading(false);
+    setArenaMicMessage("");
+    setArenaTranscriptRating(null);
+    setArenaHintOpen(false);
+  };
+
+  const continueArenaBeat = () => {
+    const completedResponse = arenaResponse.trim() || arenaFirstResponse;
+    if (completedResponse) setArenaAttempts((current) => [...current, completedResponse]);
+    if (arenaBeat >= teamLunchBeats.length - 1) {
+      setArenaCompletion("completed");
+      setArenaIntensityAfter(arenaIntensity);
+      setArenaPhase("complete");
+      return;
+    }
+    setArenaBeat((current) => current + 1);
+    resetArenaAttempt();
+  };
+
+  const playArenaLine = async () => {
+    const startedAt = performance.now();
+    setArenaIsSpeaking(true);
+    setArenaMicMessage("Монгол аудиог бэлдэж байна…");
+    try {
+      const response = await fetch("/api/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: `${activeArenaBeat.speaker}: ${activeArenaBeat.line}` }),
+      });
+      if (!response.ok) throw new Error("tts_unavailable");
+      const data = await response.json() as { audio?: string; mimeType?: string };
+      if (!data.audio) throw new Error("empty_audio");
+      const audio = new Audio(`data:${data.mimeType ?? "audio/wav"};base64,${data.audio}`);
+      audio.onended = () => setArenaIsSpeaking(false);
+      audio.onerror = () => setArenaIsSpeaking(false);
+      setArenaMicMessage("");
+      await audio.play();
+      trackBetaEvent("scene_audio_played", { beat: arenaBeat + 1, speaker: activeArenaBeat.speaker, latency_ms: Math.round(performance.now() - startedAt) });
+    } catch {
+      setArenaIsSpeaking(false);
+      setArenaMicMessage("Аудио тоглуулж чадсангүй. Өгүүлбэрийг уншаад үргэлжлүүлж болно.");
+    }
+  };
+
+  const startArenaListening = async () => {
+    if (arenaIsListening) {
+      arenaRecorderRef.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+      });
+      arenaAudioStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const recordingStartedAt = performance.now();
+      arenaRecorderRef.current = recorder;
+      arenaAudioChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) arenaAudioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        setArenaIsListening(false);
+        stream.getTracks().forEach((track) => track.stop());
+        trackBetaEvent("response_recorded", { beat: arenaBeat + 1, input_mode: "voice", duration_ms: Math.round(performance.now() - recordingStartedAt) });
+        setArenaMicMessage("Таны Монгол яриаг текст болгож байна…");
+        try {
+          const blob = new Blob(arenaAudioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+          const audio = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result).split(",")[1] ?? "");
+            reader.onerror = () => reject(new Error("audio_read_failed"));
+            reader.readAsDataURL(blob);
+          });
+          const response = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audio, mimeType: blob.type }),
+          });
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({})) as { error?: string };
+            if (errorData.error === "unclear_audio") throw new Error("unclear_audio");
+            throw new Error("transcription_failed");
+          }
+          const data = await response.json() as { transcript?: string };
+          if (!data.transcript) throw new Error("empty_transcript");
+          setArenaResponse(data.transcript);
+          setArenaTranscriptRating(null);
+          setArenaMicMessage("Таны яриаг буулгалаа. Зөв эсэхийг хянаад илгээнэ үү.");
+        } catch (error) {
+          setArenaMicMessage(error instanceof Error && error.message === "unclear_audio"
+            ? "Яриа тод сонсогдсонгүй. Нэг богино өгүүлбэрээр дахин хэлээрэй."
+            : "Яриаг текст болгож чадсангүй. Дахин оролдох эсвэл бичиж болно.");
+        }
+      };
+      recorder.start();
+      setArenaIsListening(true);
+      setArenaMicMessage("Сонсож байна… Дуусахдаа товчийг дахин дарна уу.");
+      window.setTimeout(() => {
+        if (recorder.state === "recording") recorder.stop();
+      }, 12000);
+    } catch {
+      setArenaMicMessage("Микрофоны зөвшөөрөл хэрэгтэй. Эсвэл хариултаа бичиж болно.");
+    }
+  };
+
+  const submitArenaResponse = async () => {
+    const responseText = arenaResponse.trim();
+    if (!responseText) return;
+    if (!arenaMicMessage.includes("буулгалаа")) {
+      trackBetaEvent("response_recorded", { beat: arenaBeat + 1, input_mode: "text", duration_ms: 0 });
+    }
+    setArenaFeedbackLoading(true);
+    let result = evaluateArenaResponse(responseText, activeArenaBeat);
+    let source: "gemini" | "simulation" = "simulation";
+    try {
+      const request = await fetch("/api/coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coachLine: `${activeArenaBeat.speaker}: ${activeArenaBeat.line}`,
+          lessonTitle: `Багийн өдрийн хоол · ${arenaBeat + 1}-р мөч`,
+          lessonGoal: activeArenaBeat.prompt,
+          response: responseText,
+          previousResponse: arenaFirstResponse,
+          attempt: arenaAttemptPhase === "retry" ? "retry" : "first",
+        }),
+      });
+      if (request.ok) {
+        const data = await request.json() as { feedback?: VoiceFeedback; source?: "gemini" };
+        if (data.feedback?.positive && data.feedback?.improve) {
+          result = data.feedback;
+          source = "gemini";
+        }
+      }
+    } catch {
+      // Local rubric keeps the arena usable when the AI coach is unavailable.
+    }
+    if (arenaAttemptPhase === "respond") setArenaFirstResponse(responseText);
+    setArenaFeedback(result);
+    setArenaFeedbackSource(source);
+    setArenaFeedbackLoading(false);
+    const isRetry = arenaAttemptPhase === "retry";
+    trackBetaEvent("feedback_shown", { beat: arenaBeat + 1, source, attempt: isRetry ? "retry" : "first" });
+    if (isRetry) trackBetaEvent("retry_completed", { beat: arenaBeat + 1, level: arenaLevel });
+    setArenaAttemptPhase(isRetry ? "retry-feedback" : "feedback");
+  };
+
+  const beginArenaRetry = () => {
+    setArenaAttemptPhase("retry");
+    setArenaResponse("");
+    setArenaTranscriptRating(null);
+    setArenaMicMessage("");
+  };
+
+  const safelyFinishArena = () => {
+    if (arenaRecorderRef.current?.state === "recording") arenaRecorderRef.current.stop();
+    arenaAudioStreamRef.current?.getTracks().forEach((track) => track.stop());
+    setArenaCompletion("safe-finish");
+    setArenaIntensityAfter(arenaIntensity);
+    setArenaProgressSaved(false);
+    trackBetaEvent("control_used", { control: "safe_finish", beat: arenaBeat + 1 });
+    setArenaPaused(false);
+    setArenaPhase("complete");
+  };
+
+  const resetArena = () => {
+    if (arenaRecorderRef.current?.state === "recording") arenaRecorderRef.current.stop();
+    arenaAudioStreamRef.current?.getTracks().forEach((track) => track.stop());
+    setArenaPhase("idle");
+    setArenaBeat(0);
+    setArenaPaused(false);
+    setArenaHintOpen(false);
+    setArenaAttempts([]);
+    resetArenaAttempt();
+  };
+
+  const saveArenaProgress = () => {
+    if (arenaProgressSaved) return;
+    const today = dateKey();
+    const repetitions = arenaAttempts.length;
+    const practicedDates = Array.from(new Set([...arenaProgress.practicedDates, today]));
+    const recoveryDates = arenaCompletion === "completed" && repetitions >= teamLunchBeats.length
+      ? Array.from(new Set([...arenaProgress.recoveryDates, today]))
+      : arenaProgress.recoveryDates;
+    const sessionXp = repetitions * 8 + (arenaReflection.trim() ? 2 : 0);
+    const sessionRecord: ArenaSessionRecord = {
+      id: `${Date.now()}-${arenaProgress.sessions + 1}`,
+      date: today,
+      completion: arenaCompletion,
+      level: arenaLevel,
+      repetitions,
+      xp: sessionXp,
+      intensityBefore: arenaIntensity,
+      intensityAfter: arenaIntensityAfter,
+      reflection: arenaReflection.trim(),
+    };
+    const nextArena: ArenaProgress = {
+      sessions: arenaProgress.sessions + 1,
+      meaningfulRepetitions: arenaProgress.meaningfulRepetitions + repetitions,
+      recoveryStrength: Math.min(5, recoveryDates.length),
+      xp: arenaProgress.xp + sessionXp,
+      highestLevel: repetitions > 0 ? Math.max(arenaProgress.highestLevel, arenaLevel) : arenaProgress.highestLevel,
+      practicedDates,
+      recoveryDates,
+      lastIntensityBefore: arenaIntensity,
+      lastIntensityAfter: arenaIntensityAfter,
+      lastCompletion: arenaCompletion,
+      history: [sessionRecord, ...arenaProgress.history].slice(0, 20),
+    };
+    const nextProgress = {
+      ...progress,
+      completedDates: Array.from(new Set([...progress.completedDates, today])),
+    };
+    setArenaProgress(nextArena);
+    setProgress(nextProgress);
+    setArenaProgressSaved(true);
+    trackBetaEvent("arena_completed", {
+      completion_type: arenaCompletion,
+      level: arenaLevel,
+      repetitions,
+      xp: sessionXp,
+      intensity_before: arenaIntensity,
+      intensity_after: arenaIntensityAfter,
+      duration_reflection: Boolean(arenaReflection.trim()),
+    });
+    try {
+      window.localStorage.setItem("hariltsaa-arena-progress-v1", JSON.stringify(nextArena));
+      window.localStorage.setItem("hariltsaa-progress-v1", JSON.stringify(nextProgress));
+      if (arenaReflection.trim()) window.localStorage.setItem("hariltsaa-arena-last-reflection", arenaReflection.trim());
+    } catch {
+      // The result remains visible even if browser storage is unavailable.
+    }
   };
 
   const changeVideo = () => {
@@ -560,6 +1064,7 @@ export default function Home() {
           <span>Өдөр бүрийн харилцаа</span>
         </a>
         <nav aria-label="Үндсэн цэс">
+          <a href="#arena">Ярианы талбар</a>
           <a href="#voice-coach">AI дадлага</a>
           <a href="#roleplay">Дүрд тоглох</a>
           <a href="#progress">Ахиц</a>
@@ -614,6 +1119,229 @@ export default function Home() {
             Энэ долоо хоногт <b>{week.filter((day) => day.done).length}/7</b>
           </div>
         </aside>
+      </section>
+
+      <section className="arena-section" id="arena">
+        <div className="section-shell">
+          <div className="section-heading arena-heading">
+            <div>
+              <p className="eyebrow">ШИНЭ · ЯРИАНЫ ТАЛБАР</p>
+              <h2>Багийн өдрийн хоол</h2>
+            </div>
+            <p>Бүлгийн ярианд орох, анхаарал өөр дээр ирэх, гацсан үед сэргэхээ ганцаараа аюулгүй давт.</p>
+          </div>
+
+          {arenaPhase === "idle" && (
+            <article className="arena-card">
+              <div className="arena-card-copy">
+                <div className="arena-pills">
+                  <span>3–5 минут</span><span>Ганцаараа</span><span>{arenaProgress.meaningfulRepetitions || 3} {arenaProgress.meaningfulRepetitions ? "давталт хийсэн" : "жижиг яриа"}</span>
+                </div>
+                <p className="small-label">FLAGSHIP ARENA · LEVEL 1–3</p>
+                <h3>Төгс хариулах биш,<br />ярианд жижигхэн оролцох</h3>
+                <p>Сараа, Тэмүүлэн, Болд нартай өдрийн хоолонд сууж байна гэж төсөөлнө. Юу болохыг эхлээд мэдэж, эрчмээ өөрөө сонгоно.</p>
+                <button className="primary-button" type="button" onClick={openArena}>Аюулгүй эхлэх <IconArrow /></button>
+              </div>
+              <div className="arena-preview" aria-label="Дасгалын гурван үе">
+                <div><b>01</b><span>Ширээнд нэгдэх<small>Мэндлэх + нэг баримт</small></span></div>
+                <div><b>02</b><span>Ярианд орох<small>Нэг холбоос асуулт</small></span></div>
+                <div><b>03</b><span>Анхаарлаас сэргэх<small>Recovery phrase</small></span></div>
+                <p>{arenaProgress.sessions ? `Recovery ${arenaProgress.recoveryStrength}/5 · ${arenaProgress.xp} XP` : "Pause · Hint · Level down · Safe finish"}</p>
+              </div>
+            </article>
+          )}
+
+          {arenaPhase === "checkin" && (
+            <article className="arena-workspace arena-checkin">
+              <div className="arena-workspace-head">
+                <button className="arena-back" type="button" onClick={resetArena}>← Буцах</button>
+                <span>Алхам 1 / 2 · Бэлэн байдлаа сонгох</span>
+              </div>
+              <div className="arena-checkin-grid">
+                <div>
+                  <p className="small-label">ЯГ ОДОО</p>
+                  <h3>Энэ дасгал хэр хүчтэй санагдаж байна?</h3>
+                  <p className="arena-helper">Энэ нь эмнэлгийн үнэлгээ биш. Зөвхөн өнөөдрийн дасгалын эрчмийг тохируулна.</p>
+                  <div className="intensity-scale" role="group" aria-label="0-ээс 10 хүртэлх эрчим">
+                    {Array.from({ length: 11 }, (_, value) => (
+                      <button key={value} type="button" className={arenaIntensity === value ? "active" : ""} aria-pressed={arenaIntensity === value} onClick={() => chooseArenaIntensity(value)}>{value}</button>
+                    ))}
+                  </div>
+                  <div className="intensity-labels"><span>Тайван</span><span>Нэлээд хүчтэй</span></div>
+                  {arenaIntensity >= 8 && <div className="safe-recommendation"><b>Өнөөдөр safe mode тохиромжтой.</b><p>Урьдчилан бэлэн хариутай Level 1-ээс эхэлнэ. Хүссэн үедээ дуусгаж болно.</p></div>}
+                </div>
+                <div className="level-panel">
+                  <p className="small-label">ХҮНДРЭЛИЙН ТҮВШИН</p>
+                  {arenaLevels.map((item) => (
+                    <button key={item.level} type="button" className={arenaLevel === item.level ? "active" : ""} onClick={() => setArenaLevel(item.level)} disabled={arenaIntensity >= 8 && item.level > 1}>
+                      <b>{item.level}</b><span>{item.name}<small>{item.detail}</small></span>{arenaLevel === item.level && <i>✓</i>}
+                    </button>
+                  ))}
+                  <button className="primary-button" type="button" onClick={() => setArenaPhase("brief")}>Нөхцөлтэй танилцах <IconArrow /></button>
+                </div>
+              </div>
+            </article>
+          )}
+
+          {arenaPhase === "brief" && (
+            <article className="arena-workspace arena-brief">
+              <div className="arena-workspace-head">
+                <button className="arena-back" type="button" onClick={() => setArenaPhase("checkin")}>← Буцах</button>
+                <span>Алхам 2 / 2 · Юу болохыг урьдчилан мэдэх</span>
+              </div>
+              <div className="brief-grid">
+                <div>
+                  <p className="small-label">НӨХЦӨЛ</p>
+                  <h3>Та 5 хүний багтайгаа кафед сууна</h3>
+                  <p>Энэ хувилбарт нэг удаад нэг хүн ярьж, танд бэлэн хариу харагдана. Хэн ч доромжлохгүй, гэнэтийн чанга дайралт байхгүй.</p>
+                  <div className="character-row" aria-label="Дасгалын дүрүүд">
+                    <span><b>С</b>Сараа<small>найрсаг</small></span>
+                    <span><b>Т</b>Тэмүүлэн<small>хурдан</small></span>
+                    <span><b>Б</b>Болд<small>ахлах</small></span>
+                  </div>
+                </div>
+                <aside className="safety-contract">
+                  <p className="small-label">ТАНЫ ХЯНАЛТ</p>
+                  <ul><li>Хүссэн үедээ pause</li><li>Хариултын санаа харах</li><li>Түвшин бууруулах</li><li>Оноо алдалгүй дуусгах</li></ul>
+                  <div><span>Өнөөдрийн эрчим <b>{arenaIntensity}/10</b></span><span>Level <b>{arenaLevel}</b></span></div>
+                  <button className="primary-button" type="button" onClick={startArenaScene}>Яриаг эхлүүлэх <IconArrow /></button>
+                </aside>
+              </div>
+            </article>
+          )}
+
+          {arenaPhase === "scene" && (
+            <article className="arena-workspace arena-scene" aria-live="polite">
+              <div className="arena-scene-top">
+                <div><p className="small-label">БАГИЙН ӨДРИЙН ХООЛ</p><strong>{arenaBeat + 1} / {teamLunchBeats.length}</strong></div>
+                <div className="arena-controls">
+                  <button type="button" onClick={() => { setArenaPaused(!arenaPaused); trackBetaEvent("control_used", { control: arenaPaused ? "resume" : "pause", beat: arenaBeat + 1 }); }}>{arenaPaused ? "▶ Үргэлжлүүлэх" : "Ⅱ Pause"}</button>
+                  <button type="button" onClick={() => { setArenaHintOpen(!arenaHintOpen); if (!arenaHintOpen) trackBetaEvent("control_used", { control: "hint", beat: arenaBeat + 1 }); }}>◇ Hint</button>
+                  <button type="button" onClick={() => { setArenaLevel((level) => Math.max(1, level - 1)); trackBetaEvent("control_used", { control: "level_down", beat: arenaBeat + 1 }); }} disabled={arenaLevel === 1}>↓ Level</button>
+                  <button className="safe-exit" type="button" onClick={safelyFinishArena}>Энд дуусгах</button>
+                </div>
+              </div>
+              {arenaPaused ? (
+                <div className="arena-paused"><span>Ⅱ</span><h3>Түр зогслоо</h3><p>Амьсгалаа ажиглаад, бэлэн үедээ үргэлжлүүлээрэй.</p><button className="primary-button" type="button" onClick={() => setArenaPaused(false)}>Үргэлжлүүлэх</button></div>
+              ) : (
+                <div className="scene-grid">
+                  <div className="scene-context">
+                    <span className="scene-number">0{arenaBeat + 1}</span>
+                    <p>{arenaBeat === 0 ? "Ширээнд нэгдэх" : arenaBeat === 1 ? "Ярианд орох" : "Анхаарлаас сэргэх"}</p>
+                    <div className="scene-progress">{teamLunchBeats.map((_, index) => <i key={index} className={index <= arenaBeat ? "active" : ""} />)}</div>
+                    <small>Level {arenaLevel} · {arenaLevels[arenaLevel - 1].name}</small>
+                  </div>
+                  <div className="scene-conversation">
+                    <div className="speaker-line">
+                      <span>{activeArenaBeat.speaker}<small>{activeArenaBeat.tone}</small></span>
+                      <p>“{activeArenaBeat.line}”</p>
+                      <button type="button" onClick={playArenaLine} disabled={arenaIsSpeaking}>{arenaIsSpeaking ? "Аудио бэлдэж байна…" : "▶ Монгол яриаг сонсох"}</button>
+                    </div>
+
+                    {(arenaAttemptPhase === "respond" || arenaAttemptPhase === "retry") && (
+                      <div className="arena-response-panel">
+                        <p className="attempt-label">{arenaAttemptPhase === "retry" ? "ДАХИН ХЭЛЭХ" : "ТАНЫ ХАРИУ"}</p>
+                        <h3>{arenaAttemptPhase === "retry" ? "Нэг сайжруулалтаа ашиглаад дахин хэлээрэй." : activeArenaBeat.prompt}</h3>
+                        {arenaHintOpen && <div className="arena-hint"><b>Хариултын санаа</b><p>{activeArenaBeat.hint}</p></div>}
+                        {arenaAttemptPhase === "respond" && arenaLevel === 1 && (
+                          <div className="guided-responses" aria-label="Бэлэн хариултын хувилбар">
+                            {activeArenaBeat.responses.map((response) => <button type="button" key={response} onClick={() => setArenaResponse(response)}>{response}<span>Сонгох</span></button>)}
+                          </div>
+                        )}
+                        <div className="arena-voice-actions">
+                          <button className={`mic-button ${arenaIsListening ? "listening" : ""}`} type="button" onClick={startArenaListening} disabled={arenaIsSpeaking || arenaFeedbackLoading}>
+                            <span>●</span>{arenaIsListening ? "Дуусгах" : "Микрофоноор хариулах"}
+                          </button>
+                          <span>эсвэл бичгээр</span>
+                        </div>
+                        <label htmlFor="arena-response">Таны хэлэх өгүүлбэр</label>
+                        <textarea id="arena-response" rows={3} value={arenaResponse} onChange={(event) => { setArenaResponse(event.target.value); setArenaTranscriptRating(null); }} placeholder={activeArenaBeat.responses[0]} />
+                        {arenaMicMessage && <p className="arena-mic-message">{arenaMicMessage}</p>}
+                        {arenaResponse && arenaMicMessage.includes("буулгалаа") && (
+                          <div className="transcript-check arena-transcript-check">
+                            <span>Энэ хөрвүүлэлт зөв үү?</span>
+                            <button type="button" className={arenaTranscriptRating === "yes" ? "active" : ""} onClick={() => { if (arenaTranscriptRating !== "yes") trackBetaEvent("transcript_confirmed", { beat: arenaBeat + 1, accepted: true, edited: false }); setArenaTranscriptRating("yes"); }}>Тийм</button>
+                            <button type="button" className={arenaTranscriptRating === "no" ? "active no" : ""} onClick={() => { if (arenaTranscriptRating !== "no") trackBetaEvent("transcript_confirmed", { beat: arenaBeat + 1, accepted: false, edited: true }); setArenaTranscriptRating("no"); setArenaMicMessage("Зөрүүтэй үгийг засаад илгээх эсвэл дахин хэлээрэй."); }}>Үгүй</button>
+                          </div>
+                        )}
+                        <button className="primary-button arena-submit" type="button" disabled={!arenaResponse.trim() || arenaFeedbackLoading || arenaIsListening || (arenaMicMessage.includes("буулгалаа") && arenaTranscriptRating !== "yes")} onClick={submitArenaResponse}>
+                          {arenaFeedbackLoading ? "AI зөвлөгөө бэлдэж байна…" : arenaAttemptPhase === "retry" ? "Дахин хэлснээ шалгах" : "Хариултаа шалгах"} {!arenaFeedbackLoading && <IconArrow />}
+                        </button>
+                        <p className="scene-note">Transcript-ээ засаж болно. Баталгаагүй аудиог AI үнэлэхгүй.</p>
+                      </div>
+                    )}
+
+                    {(arenaAttemptPhase === "feedback" || arenaAttemptPhase === "retry-feedback") && arenaFeedback && (
+                      <div className="arena-feedback-panel">
+                        <div className={`feedback-source ${arenaFeedbackSource}`}>{arenaFeedbackSource === "gemini" ? "Gemini-ийн хувийн зөвлөгөө" : "Local хамгаалалттай зөвлөгөө"}</div>
+                        <p className="attempt-label">{arenaAttemptPhase === "retry-feedback" ? "ДАХИН ХЭЛСЭН ХАРИУ" : "ТАНЫ ЭХНИЙ ХАРИУЛТ"}</p>
+                        <blockquote>“{arenaAttemptPhase === "retry-feedback" ? arenaResponse : arenaFirstResponse}”</blockquote>
+                        <div className="feedback-line good"><b>✓ Сайн болсон</b><p>{arenaFeedback.positive}</p></div>
+                        <div className="feedback-line improve"><b>→ Нэг сайжруулалт</b><p>{arenaFeedback.improve}</p></div>
+                        {arenaAttemptPhase === "feedback" ? (
+                          <button className="primary-button" type="button" onClick={beginArenaRetry}>Нэг удаа дахин хэлэх <IconArrow /></button>
+                        ) : (
+                          <button className="primary-button" type="button" onClick={continueArenaBeat}>{arenaBeat === teamLunchBeats.length - 1 ? "Талбарыг дуусгах" : "Дараагийн мөч"} <IconArrow /></button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </article>
+          )}
+
+          {arenaPhase === "complete" && (
+            <article className="arena-workspace arena-complete">
+              <span className={arenaCompletion === "completed" ? "complete-mark" : "safe-mark"}>{arenaCompletion === "completed" ? "✓" : "Ⅱ"}</span>
+              <p className="small-label">{arenaCompletion === "completed" ? "ТАЛБАР ДУУСЛАА" : "АЮУЛГҮЙ ДУУСГАЛТ"}</p>
+              <h3>{arenaCompletion === "completed" ? "Та ярианд 3 удаа оролцлоо." : "Өнөөдөр энд дуусгах нь зөв сонголт байж болно."}</h3>
+              <p>{arenaCompletion === "completed" ? "Мэндэлж, холбоос асуулт тавьж, анхаарал өөр дээр ирэхэд богино хариуллаа." : "Ахиц устахгүй, оноо хасахгүй. Дараагийн удаа ижил эсвэл хөнгөн түвшнээс үргэлжлүүлээрэй."}</p>
+              <div className="arena-result"><span><b>{arenaAttempts.length}</b> Meaningful repetition</span><span><b>Level {arenaLevel}</b> өнөөдрийн түвшин</span><span><b>+{arenaAttempts.length * 8 + (arenaReflection.trim() ? 2 : 0)} XP</b> энэ session</span></div>
+
+              {!arenaProgressSaved ? (
+                <div className="arena-review-form">
+                  <div className="review-intensity-head"><label>Одоо дасгал хэр хүчтэй санагдаж байна?</label><b>{arenaIntensityAfter}/10</b></div>
+                  <input type="range" min="0" max="10" value={arenaIntensityAfter} onChange={(event) => setArenaIntensityAfter(Number(event.target.value))} aria-label="Дасгалын дараах эрчим" />
+                  <div className="review-intensity-change"><span>Эхлэхэд {arenaIntensity}/10</span><strong className={arenaIntensityAfter <= arenaIntensity ? "down" : "up"}>{arenaIntensityAfter === arenaIntensity ? "Өөрчлөлтгүй" : arenaIntensityAfter < arenaIntensity ? `${arenaIntensity - arenaIntensityAfter}-аар буурсан` : `${arenaIntensityAfter - arenaIntensity}-аар нэмэгдсэн`}</strong></div>
+                  <label htmlFor="arena-reflection">Нэг өгүүлбэрийн reflection <span>(заавал биш · +2 XP)</span></label>
+                  <textarea id="arena-reflection" rows={2} value={arenaReflection} onChange={(event) => setArenaReflection(event.target.value)} placeholder="Хамгийн хэцүү мөч нь… Дараагийн удаа би…" />
+                  <button className="primary-button" type="button" onClick={saveArenaProgress}>Ахицдаа хадгалах <IconArrow /></button>
+                </div>
+              ) : (
+                <div className="arena-saved-summary">
+                  <span>✓</span>
+                  <div><b>Өнөөдрийн ахиц хадгалагдлаа</b><p>{arenaProgress.meaningfulRepetitions} нийт давталт · Recovery {arenaProgress.recoveryStrength}/5 · {arenaProgress.xp} Arena XP</p></div>
+                </div>
+              )}
+
+              {arenaProgressSaved && (
+                <div className="beta-feedback-card">
+                  {!betaFeedbackSent ? (
+                    <>
+                      <div><p className="small-label">BETA FEEDBACK · 20 СЕКУНД</p><h4>Энэ дасгал танд хэр хэрэгтэй санагдав?</h4></div>
+                      <div className="beta-rating" role="group" aria-label="Дасгалын хэрэгцээ 1-ээс 5">
+                        {[1, 2, 3, 4, 5].map((value) => <button type="button" key={value} className={betaRating === value ? "active" : ""} aria-pressed={betaRating === value} onClick={() => setBetaRating(value)}>{value}</button>)}
+                      </div>
+                      <label htmlFor="beta-issue">Хамгийн их саад болсон зүйл</label>
+                      <select id="beta-issue" value={betaIssue} onChange={(event) => setBetaIssue(event.target.value)}>
+                        <option value="none">Саад байгаагүй</option><option value="stt">Яриа буруу хөрвүүлсэн</option><option value="tts">Дүрийн дуу ойлгомжгүй</option><option value="feedback">AI зөвлөгөө тохироогүй</option><option value="intensity">Хэт хэцүү санагдсан</option><option value="ui">Яаж ашиглах нь ойлгомжгүй</option><option value="other">Бусад</option>
+                      </select>
+                      <label htmlFor="beta-comment">Нэг өгүүлбэр <span>(заавал биш)</span></label>
+                      <textarea id="beta-comment" rows={2} maxLength={300} value={betaComment} onChange={(event) => setBetaComment(event.target.value)} placeholder="Юуг өөрчилбөл илүү хэрэгтэй болох вэ?" />
+                      <p className="beta-privacy">Аудио болон таны дасгалын transcript илгээгдэхгүй. Энд нууц мэдээлэл бүү бичээрэй.</p>
+                      <button className="primary-button" type="button" disabled={!betaRating} onClick={submitBetaFeedback}>Feedback илгээх</button>
+                    </>
+                  ) : (
+                    <div className="beta-thanks"><span>♡</span><div><b>Баярлалаа.</b><p>Таны feedback дараагийн хувилбарыг шийдэхэд ашиглагдана.</p></div></div>
+                  )}
+                </div>
+              )}
+
+              <div className="arena-complete-actions"><button className="primary-button" type="button" onClick={openArena}>Дахин хийх</button><button className="text-button" type="button" onClick={resetArena}>Дуусгах <IconArrow /></button></div>
+            </article>
+          )}
+        </div>
       </section>
 
       <section className="voice-coach-section" id="voice-coach">
@@ -970,9 +1698,10 @@ export default function Home() {
           </p>
         </div>
         <div className="progress-stats">
-          <div><strong>{progress.sessions}</strong><span>нийт дасгал</span></div>
+          <div><strong>{progress.sessions + arenaProgress.sessions}</strong><span>нийт session</span></div>
           <div><strong>{streak}</strong><span>өдрийн дараалал</span></div>
-          <div><strong>{progress.lastRating || "—"}</strong><span>сүүлийн үнэлгээ</span></div>
+          <div><strong>{arenaProgress.meaningfulRepetitions}</strong><span>утгатай давталт</span></div>
+          <div><strong>{xp}</strong><span>нийт XP</span></div>
         </div>
         <div className="weekly-card">
           <div>
@@ -986,6 +1715,29 @@ export default function Home() {
               </div>
             ))}
           </div>
+        </div>
+        <div className="arena-progress-card">
+          <div><span>БАГИЙН ӨДРИЙН ХООЛ</span><strong>Recovery Strength</strong><p>Өөр өдөр бүрэн сэргээх мөчийг давтахад батжина.</p></div>
+          <div className="recovery-meter" aria-label={`Recovery Strength ${arenaProgress.recoveryStrength} / 5`}>
+            {Array.from({ length: 5 }, (_, index) => <i key={index} className={index < arenaProgress.recoveryStrength ? "active" : ""}>{index < arenaProgress.recoveryStrength ? "✓" : index + 1}</i>)}
+          </div>
+          <div className="arena-progress-meta"><span>Дээд түвшин <b>{arenaProgress.highestLevel || "—"}</b></span><span>Session <b>{arenaProgress.sessions}</b></span><span>Сүүлийн эрчим <b>{arenaProgress.sessions ? arenaProgress.lastIntensityAfter : "—"}/10</b></span></div>
+          {arenaProgress.history.length > 0 && (
+            <details className="arena-history">
+              <summary>Сүүлийн session-үүдийг харах</summary>
+              <div>{arenaProgress.history.slice(0, 5).map((item) => <p key={item.id}><span>{item.date}</span><b>Level {item.level}</b><span>{item.repetitions} давталт</span><span>{item.intensityBefore} → {item.intensityAfter}</span><strong>+{item.xp} XP</strong></p>)}</div>
+            </details>
+          )}
+        </div>
+        <div className="beta-metrics-card">
+          <div className="beta-metrics-head"><div><span>PRIVATE BETA METRICS</span><strong>Туршилтын чанарын дохио</strong></div><button type="button" onClick={exportBetaData} disabled={!betaEvents.length}>JSON татах</button></div>
+          <div className="beta-metrics-grid">
+            <div><strong>{sttAcceptanceRate || "—"}{sttAcceptanceRate ? "%" : ""}</strong><span>STT зөв баталсан</span><small>{acceptedTranscripts}/{transcriptEvents.length} хөрвүүлэлт</small></div>
+            <div><strong>{averageBetaRating}</strong><span>Feedback үнэлгээ</span><small>{submittedFeedback.length} хариулт</small></div>
+            <div><strong>{betaEvents.filter((event) => event.name === "retry_completed").length}</strong><span>Retry completed</span><small>Дахин хэлсэн тоо</small></div>
+            <div><strong>{betaEvents.filter((event) => event.name === "control_used" && event.properties.control === "safe_finish").length}</strong><span>Safe finish</span><small>Шийтгэлгүй дуусгалт</small></div>
+          </div>
+          <p>Эдгээр тоо зөвхөн энэ төхөөрөмжийн сүүлийн 200 event. Татсан файлд аудио болон transcript орохгүй.</p>
         </div>
       </section>
 
