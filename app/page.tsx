@@ -758,3 +758,260 @@ export default function Home() {
                       <p className="small-label">01 · СОНСОХ МАТЕРИАЛ</p>
                       <h3>90 секунд анхааралтай сонс</h3>
                     </div>
+                    <button className="source-button" type="button" onClick={() => setVideoEditorOpen(!videoEditorOpen)}>
+                      {videoEditorOpen ? "Хаах" : "Өөр видео"}
+                    </button>
+                  </div>
+
+                  {videoEditorOpen && (
+                    <div className="video-editor">
+                      <label htmlFor="youtube-url">YouTube холбоос</label>
+                      <div>
+                        <input
+                          id="youtube-url"
+                          type="url"
+                          value={videoInput}
+                          onChange={(event) => setVideoInput(event.target.value)}
+                          placeholder="https://www.youtube.com/watch?v=..."
+                        />
+                        <button type="button" onClick={changeVideo}>Солих</button>
+                      </div>
+                      {videoError && <p role="alert">{videoError}</p>}
+                      {videoId !== defaultVideoId && (
+                        <button className="reset-source" type="button" onClick={resetVideo}>Анхны бичлэг рүү буцах</button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="video-frame">
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&end=95`}
+                      title="Идэвхтэй сонсох дадлагын YouTube бичлэг"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen
+                    />
+                  </div>
+                  <div className="video-note">
+                    <span>▶</span>
+                    <p><b>Нэг л удаа сонс.</b> Эхний 0:00–1:30 хэсэгт тэмдэглэл хийхгүй, хариултаа урьдчилж бодохгүй.</p>
+                  </div>
+                  <a className="youtube-fallback" href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noreferrer">
+                    Энд тоглохгүй бол YouTube дээр нээх ↗
+                  </a>
+                </div>
+
+                <div className="listening-form">
+                  <p className="small-label">02 · СОНССОНОО БОЛОВСРУУЛАХ</p>
+                  <h3>Хариултаа өөрийн үгээр бич</h3>
+                  <p className="form-intro">Зөв хариулт хайхгүй. Гол санаа, мэдрэмж, дараагийн асуултыг ялгаж сурах нь зорилго.</p>
+
+                  <label htmlFor="listen-summary"><span>1</span> Гол санаа нь юу байсан бэ?</label>
+                  <textarea
+                    id="listen-summary"
+                    rows={2}
+                    value={listeningAnswers.summary}
+                    onChange={(event) => setListeningAnswers((current) => ({ ...current, summary: event.target.value }))}
+                    placeholder="Тэр хүн ... тухай хэлсэн."
+                  />
+
+                  <label htmlFor="listen-feeling"><span>2</span> Ямар мэдрэмж эсвэл хэрэгцээ анзаарав?</label>
+                  <textarea
+                    id="listen-feeling"
+                    rows={2}
+                    value={listeningAnswers.feeling}
+                    onChange={(event) => setListeningAnswers((current) => ({ ...current, feeling: event.target.value }))}
+                    placeholder="Тэр ... байгаа мэт санагдсан, учир нь ..."
+                  />
+
+                  <label htmlFor="listen-question"><span>3</span> Нэг нээлттэй асуулт тавибал?</label>
+                  <textarea
+                    id="listen-question"
+                    rows={2}
+                    value={listeningAnswers.question}
+                    onChange={(event) => setListeningAnswers((current) => ({ ...current, question: event.target.value }))}
+                    placeholder="Таны хувьд ... нь ямар байсан бэ?"
+                  />
+
+                  <button
+                    className="primary-button"
+                    disabled={!Object.values(listeningAnswers).every((answer) => answer.trim())}
+                    onClick={() => setPracticeStep(2)}
+                  >
+                    Өөрийгөө үнэлэх <IconArrow />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {practiceStep === 1 && exerciseIndex !== 0 && (
+              <div className="workspace-content timer-layout">
+                <div className="timer" aria-label={`${timeLabel} үлдсэн`}>
+                  <span>{timeLabel}</span>
+                  <small>ӨӨРИЙН ХЭМНЭЛЭЭР</small>
+                </div>
+                <div>
+                  <p className="small-label">ДАДЛАГА ХИЙХ</p>
+                  <h3>Нэг бодит яриагаа сонго</h3>
+                  <p>{exercise.instruction} Хэлэх өгүүлбэрээ чангаар 2–3 удаа давтаарай.</p>
+                  <div className="button-row">
+                    <button className="primary-button" onClick={() => setTimerRunning(!timerRunning)}>
+                      {timerRunning ? "Түр зогсоох" : seconds < 300 ? "Үргэлжлүүлэх" : "Цаг эхлүүлэх"}
+                    </button>
+                    <button className="text-button" onClick={() => { setTimerRunning(false); setPracticeStep(2); }}>
+                      Дүгнэх <IconArrow />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {practiceStep === 2 && (
+              <div className="workspace-content">
+                <span className="step-number">03</span>
+                <div className="reflection-form">
+                  <p className="small-label">ДҮГНЭХ</p>
+                  <h3>{exercise.reflection}</h3>
+                  <label>Өөрийгөө үнэлээрэй</label>
+                  <div className="rating" role="group" aria-label="1-ээс 5 хүртэл үнэлэх">
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <button
+                        type="button"
+                        className={rating === value ? "selected" : ""}
+                        aria-pressed={rating === value}
+                        onClick={() => setRating(value)}
+                        key={value}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                  <label htmlFor="reflection">Нэг өгүүлбэрийн тэмдэглэл <span>(заавал биш)</span></label>
+                  <textarea
+                    id="reflection"
+                    value={reflection}
+                    onChange={(event) => setReflection(event.target.value)}
+                    placeholder="Дараагийн удаа би..."
+                    rows={3}
+                  />
+                  <button className="primary-button" disabled={!rating} onClick={saveSession}>
+                    Ахицдаа хадгалах <IconArrow />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {practiceStep === 3 && (
+              <div className="success-state">
+                <span aria-hidden="true">✓</span>
+                <p className="small-label">ӨНӨӨДРИЙН ДАВТАЛТ БҮРТГЭГДЛЭЭ</p>
+                <h3>Сайн ажиллалаа.</h3>
+                <p>Дараагийн бодит яриандаа энэ нэг өгүүлбэрийг туршаад үзээрэй.</p>
+                <button className="text-button" onClick={() => chooseExercise((exerciseIndex + 1) % exercises.length)}>
+                  Өөр дасгал сонгох <IconArrow />
+                </button>
+              </div>
+            )}
+          </article>
+        )}
+      </section>
+
+      <section className="roleplay-section" id="roleplay">
+        <div className="section-shell">
+          <div className="section-heading inverse">
+            <div>
+              <p className="eyebrow">ДҮРД ТОГЛОЖ ДАДЛАГА ХИЙХ</p>
+              <h2>Хэлэхээсээ өмнө туршаад үз</h2>
+            </div>
+            <p>Хариулт бүрийн дараа богино тайлбар авч, өөр хувилбарыг аюулгүй орчинд туршина.</p>
+          </div>
+          <div className="scenario-grid">
+            {scenarios.map((scenario, index) => (
+              <button
+                className="scenario-card"
+                type="button"
+                key={scenario.id}
+                onClick={() => { setSelectedScenario(scenario); setRoleFeedback(null); }}
+              >
+                <span className={`scenario-number tone-${index + 1}`}>0{index + 1}</span>
+                <small>{scenario.category}</small>
+                <h3>{scenario.title}</h3>
+                <p>{scenario.description}</p>
+                <span className="scenario-meta"><IconClock /> 3–5 мин <IconArrow /></span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="progress-section section-shell" id="progress">
+        <div className="progress-copy">
+          <p className="eyebrow">ТАНЫ АХИЦ</p>
+          <h2>Төгс биш, тогтвортой</h2>
+          <p>
+            Нэг өдөрт нэг жижиг харилцааг илүү сайн хийхэд л төвлөр. Таны ахиц зөвхөн энэ төхөөрөмж дээр хадгалагдана.
+          </p>
+        </div>
+        <div className="progress-stats">
+          <div><strong>{progress.sessions}</strong><span>нийт дасгал</span></div>
+          <div><strong>{streak}</strong><span>өдрийн дараалал</span></div>
+          <div><strong>{progress.lastRating || "—"}</strong><span>сүүлийн үнэлгээ</span></div>
+        </div>
+        <div className="weekly-card">
+          <div>
+            <span>ЭНЭ ДОЛОО ХОНОГ</span>
+            <strong>{week.filter((day) => day.done).length} / 7 өдөр</strong>
+          </div>
+          <div className="large-week">
+            {week.map((day) => (
+              <div key={day.key} className={day.done ? "done" : ""}>
+                <i>{day.done ? "✓" : ""}</i><span>{day.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <span>Өдөр бүрийн харилцаа</span>
+        <p>Өнөөдөр нэг яриагаа илүү сайн болгоё.</p>
+        <a href="#top">Дээш очих ↑</a>
+      </footer>
+
+      {selectedScenario && (
+        <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setSelectedScenario(null);
+        }}>
+          <section className="role-dialog" role="dialog" aria-modal="true" aria-labelledby="role-title">
+            <button className="dialog-close" aria-label="Хаах" onClick={() => setSelectedScenario(null)}>×</button>
+            <p className="small-label">{selectedScenario.category}</p>
+            <h2 id="role-title">{selectedScenario.title}</h2>
+            <div className="speech counterpart">
+              <span>НӨГӨӨ ХҮН</span>
+              <p>{selectedScenario.counterpart}</p>
+            </div>
+            <h3>{selectedScenario.prompt}</h3>
+            <div className="role-options">
+              {selectedScenario.options.map((option) => (
+                <button
+                  type="button"
+                  className={roleFeedback === option ? (option.helpful ? "helpful" : "try-again") : ""}
+                  onClick={() => setRoleFeedback(option)}
+                  key={option.label}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            {roleFeedback && (
+              <div className={`coach-feedback ${roleFeedback.helpful ? "helpful" : "try-again"}`} aria-live="polite">
+                <b>{roleFeedback.helpful ? "Сайн сонголт" : "Өөрөөр туршаад үзье"}</b>
+                <p>{roleFeedback.feedback}</p>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </main>
+  );
+}
