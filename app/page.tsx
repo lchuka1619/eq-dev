@@ -4,6 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type VoicePhase = "ready" | "respond" | "feedback" | "retry" | "complete";
 type VoiceFeedback = { positive: string; improve: string };
+type MicroLesson = {
+  skill: string;
+  title: string;
+  goal: string;
+  line: string;
+  placeholder: string;
+  keywords: string[];
+};
 type SpeechResultEvent = { results: { [index: number]: { [index: number]: { transcript: string } } } };
 type SpeechRecognitionLike = {
   lang: string;
@@ -151,11 +159,19 @@ const emptyProgress: Progress = {
 };
 
 const defaultVideoId = "aDMtx5ivKK0";
-const coachLine = "Өнөөдөр төлөвлөсөн ажлаа амжуулаагүй болохоор жаахан сэтгэлээр уначихлаа.";
+const microLessons: MicroLesson[] = [
+  { skill: "ИДЭВХТЭЙ СОНСОХ", title: "Мэдрэмжийг нь буцааж хэл", goal: "Утга ба мэдрэмжийг нэрлээд нэг нээлттэй асуулт тавих", line: "Өнөөдөр төлөвлөсөн ажлаа амжуулаагүй болохоор жаахан сэтгэлээр уначихлаа.", placeholder: "Сэтгэлээр унасан юм байна. Яг аль хэсэг нь хамгийн хэцүү байв?", keywords: ["сэтгэл", "урам", "унасан", "хэцүү"] },
+  { skill: "ТОДОРХОЙ ХҮСЭЛТ", title: "Хүсэлтээ хугацаатай хэл", goal: "Хэрэгцээ, үйлдэл, хугацааг нэг богино хүсэлтэд оруулах", line: "Тайлангийн эхний хувилбар хэзээ хэрэгтэйг сайн ойлгосонгүй.", placeholder: "Надад өнөөдөр хэрэгтэй байна. 16:00 гэхэд эхний хувилбарыг илгээж болох уу?", keywords: ["хэрэгтэй", "илгээ", "цаг", "өнөөдөр", "маргааш"] },
+  { skill: "ХИЛ ХЯЗГААР", title: "Эелдгээр үгүй гэж хэл", goal: "Боломжгүйгээ товч хэлээд хийж чадах хувилбар санал болгох", line: "Энэ орой миний ажлыг чи л амжуулж өгч чадна.", placeholder: "Өнөө орой боломжгүй. Харин маргааш 20 минут хамт хараад өгч чадна.", keywords: ["боломжгүй", "чадахгүй", "харин", "маргааш", "болно"] },
+  { skill: "САНАЛ ЗӨРӨЛДӨӨН", title: "Хамгаалахын өмнө тодруул", goal: "Маргалдахгүйгээр шалтгааныг нь асуух", line: "Энэ санаа бодитой биш. Ингэж цаг алдах хэрэггүй.", placeholder: "Яг аль хэсгийг бодитой биш гэж үзэж байгааг тодруулж болох уу?", keywords: ["яагаад", "аль", "юу", "тодруул", "үзэж"] },
+  { skill: "СЭТГЭЛИЙН ДЭМЖЛЭГ", title: "Шийдэл өгөхгүйгээр дэмж", goal: "Мэдрэмжийг нь хүлээн зөвшөөрөөд сонсох орон зай өгөх", line: "Сүүлийн үед бүх юм давхацчихсан, үнэхээр ядарч байна.", placeholder: "Их ачаалалтай, ядарсан юм байна. Яг одоо хамгийн хүнд нь юу байна?", keywords: ["ядар", "ачаалал", "хүнд", "сонс", "ойлгож"] },
+  { skill: "УУЧЛАЛТ", title: "Тайлбаргүйгээр хариуцлага хүлээ", goal: "Үйлдлээ нэрлэж, нөлөөг зөвшөөрөөд засах алхам хэлэх", line: "Чи өчигдрийн уулзалтад ирээгүй, би ганцаараа хүлээсэн.", placeholder: "Ирээгүйдээ уучлаарай. Чамайг хүлээлгэсэн байна. Өнөөдөр дахин цаг тохиръё.", keywords: ["уучла", "хүлээлгэ", "алдаа", "дахин", "тохир"] },
+  { skill: "ТАЙВАН FEEDBACK", title: "Баримт, нөлөө, хүсэлт хэл", goal: "Хүнийг шүүхгүйгээр болсон зүйл ба хүсэлтээ тодорхой хэлэх", line: "Би яриаг чинь хоёр удаа тасалчихсан юм шиг байна.", placeholder: "Хоёр удаа таслахад санаагаа дуусгахад хэцүү байлаа. Дуустал минь сонсож болох уу?", keywords: ["хоёр", "тасал", "хэцүү", "сонс", "дуус"] },
+];
 
-function evaluateResponse(value: string): VoiceFeedback {
+function evaluateResponse(value: string, lesson: MicroLesson): VoiceFeedback {
   const text = value.toLocaleLowerCase("mn-MN");
-  const hasMeaning = ["ажил", "амжуулаагүй", "амжаагүй"].some((word) => text.includes(word));
+  const hasMeaning = lesson.keywords.some((word) => text.includes(word));
   const hasEmotion = ["сэтгэл", "урам", "хэцүү", "санаа", "уначих"].some((word) => text.includes(word));
   const hasQuestion = ["юу", "яаж", "аль", "ямар", "хэзээ", "хаана", "?"].some((word) => text.includes(word));
 
@@ -167,11 +183,11 @@ function evaluateResponse(value: string): VoiceFeedback {
         ? "Та яриаг үргэлжлүүлэх нээлттэй орон зай гаргалаа."
         : "Та шууд хариулах зоригтой алхам хийлээ.";
 
-  const improve = !hasEmotion
-    ? "Дараагийн удаа мэдрэмжийг нэрлээрэй: “сэтгэлээр унасан юм байна”."
-    : !hasQuestion
-      ? "Төгсгөлд нь “Яг аль хэсэг нь хамгийн хэцүү байв?” гэх нээлттэй асуулт нэмээрэй."
-      : "Сайн бүтэцтэй байна. Одоо “жаахан” гэх хүний өөрийн үгийг хадгалаад илүү товч хэлээрэй.";
+  const improve = !hasMeaning
+    ? `Дасгалын зорилгод ойртуулаарай: ${lesson.goal}.`
+    : !hasQuestion && [0, 3, 4, 6].includes(microLessons.indexOf(lesson))
+      ? "Төгсгөлд нь нэг нээлттэй асуулт нэмээрэй."
+      : "Сайн бүтэцтэй байна. Одоо санаагаа нэг өгүүлбэрт илүү товч хэлээрэй.";
 
   return { positive, improve };
 }
@@ -253,6 +269,7 @@ export default function Home() {
     question: "",
   });
   const [voicePhase, setVoicePhase] = useState<VoicePhase>("ready");
+  const [lessonIndex, setLessonIndex] = useState(() => new Date().getDay() % microLessons.length);
   const [voiceResponse, setVoiceResponse] = useState("");
   const [firstVoiceResponse, setFirstVoiceResponse] = useState("");
   const [voiceFeedback, setVoiceFeedback] = useState<VoiceFeedback | null>(null);
@@ -263,6 +280,8 @@ export default function Home() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const exercise = exercises[exerciseIndex];
+  const lesson = microLessons[lessonIndex];
+  const coachLine = lesson.line;
   const streak = calculateStreak(progress.completedDates);
 
   useEffect(() => {
@@ -369,7 +388,7 @@ export default function Home() {
   const submitVoiceResponse = async () => {
     if (!voiceResponse.trim()) return;
     setFeedbackLoading(true);
-    let result = evaluateResponse(voiceResponse);
+    let result = evaluateResponse(voiceResponse, lesson);
     let source: "gemini" | "simulation" = "simulation";
     try {
       const request = await fetch("/api/coach", {
@@ -377,6 +396,8 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           coachLine,
+          lessonTitle: lesson.title,
+          lessonGoal: lesson.goal,
           response: voiceResponse.trim(),
           previousResponse: firstVoiceResponse,
           attempt: voicePhase === "retry" ? "retry" : "first",
@@ -426,6 +447,11 @@ export default function Home() {
     setFeedbackSource("simulation");
     setFeedbackLoading(false);
     setMicMessage("");
+  };
+
+  const chooseLesson = (index: number) => {
+    resetVoiceCoach();
+    setLessonIndex(index);
   };
 
   const chooseExercise = (index: number) => {
@@ -574,10 +600,18 @@ export default function Home() {
               {voicePhase === "ready" && (
                 <div className="voice-intro">
                   <span className="coach-avatar">AI</span>
-                  <p className="small-label">ИДЭВХТЭЙ СОНСОХ · 1 МИНУТ</p>
-                  <h3>Зөвлөгөө өгөхөөсөө өмнө ойлгосноо буцааж хэл.</h3>
+                  <p className="small-label">{lesson.skill} · 1 МИНУТ</p>
+                  <h3>{lesson.title}</h3>
                   <p>Бэлэн болмогц богино яриаг сонсоно. Тэмдэглэл хийх шаардлагагүй.</p>
                   <button className="primary-button" onClick={playCoachLine}>▶ Яриаг сонсох</button>
+                  <div className="lesson-picker" aria-label="7 өдрийн микро дасгал">
+                    {microLessons.map((item, index) => (
+                      <button type="button" className={lessonIndex === index ? "active" : ""} onClick={() => chooseLesson(index)} aria-label={`${index + 1}-р дасгал: ${item.title}`} key={item.title}>
+                        {index + 1}
+                      </button>
+                    ))}
+                  </div>
+                  <small className="lesson-count">7 өдрийн зам · Өнөөдрийн lesson {lessonIndex + 1}/7</small>
                 </div>
               )}
 
@@ -596,7 +630,7 @@ export default function Home() {
                     <span>эсвэл</span>
                   </div>
                   <label htmlFor="voice-response">Хариултаа бичих</label>
-                  <textarea id="voice-response" rows={3} value={voiceResponse} onChange={(event) => setVoiceResponse(event.target.value)} placeholder="Жишээ: Сэтгэлээр унасан юм байна. Яг аль хэсэг нь хэцүү байв?" />
+                  <textarea id="voice-response" rows={3} value={voiceResponse} onChange={(event) => setVoiceResponse(event.target.value)} placeholder={`Жишээ: ${lesson.placeholder}`} />
                   {micMessage && <p className="mic-message">{micMessage}</p>}
                   <button className="primary-button" disabled={!voiceResponse.trim() || feedbackLoading} onClick={submitVoiceResponse}>
                     {feedbackLoading ? "AI үнэлж байна…" : voicePhase === "retry" ? "Дахин хэлснээ дуусгах" : "Хариултаа шалгах"} {!feedbackLoading && <IconArrow />}
@@ -624,6 +658,7 @@ export default function Home() {
                   <h3>Өнөөдрийн жижиг ялалт.</h3>
                   <p>Та сонсож, хариулж, зөвлөгөөг ашиглан дахин хэллээ. Энэ бол бодит ярианд шилжих хамгийн богино давталт.</p>
                   <button className="text-button" onClick={resetVoiceCoach}>Дахин хийх <IconArrow /></button>
+                  <button className="primary-button next-lesson" onClick={() => chooseLesson((lessonIndex + 1) % microLessons.length)}>Дараагийн lesson <IconArrow /></button>
                 </div>
               )}
             </article>
