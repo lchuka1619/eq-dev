@@ -155,6 +155,8 @@ svg { width: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-li
 .simulation-badge i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: #e3a269; }
 .simulation-badge.connected { color: #19584f; background: #e2f0ea; }
 .simulation-badge.connected i { background: var(--teal-bright); }
+.lesson-status { width: min(700px, 100%); margin: 12px auto 0; padding: 10px 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; color: #64726e; background: #f5f4ef; font-size: 11px; }
+.lesson-status b { color: var(--teal); font-size: 13px; }
 .voice-intro, .voice-complete { margin: auto; max-width: 640px; text-align: center; }
 .coach-avatar { width: 76px; height: 76px; margin: 0 auto 22px; border-radius: 43% 57% 54% 46%; display: grid; place-items: center; color: #fff; background: var(--teal); font-weight: 800; box-shadow: 0 14px 28px rgba(9,65,59,.2); }
 .voice-intro h3, .voice-complete h3 { margin: 7px 0 13px; font-size: 32px; letter-spacing: -.04em; }
@@ -178,6 +180,11 @@ svg { width: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-li
 .voice-response label { display: block; margin-bottom: 7px; font-size: 12px; font-weight: 700; }
 .voice-response textarea { margin-bottom: 10px; }
 .mic-message { margin: 0 0 14px; color: var(--teal); font-size: 12px; }
+.transcript-check { margin: -2px 0 16px; padding: 11px 13px; border-radius: 12px; display: flex; gap: 8px; align-items: center; color: #53635e; background: #f0f5f2; font-size: 12px; }
+.transcript-check span { margin-right: auto; font-weight: 680; }
+.transcript-check button { padding: 6px 11px; border: 1px solid #bfd0c9; border-radius: 99px; color: var(--teal); background: #fff; font-weight: 700; cursor: pointer; }
+.transcript-check button.active { color: #fff; background: var(--teal); border-color: var(--teal); }
+.transcript-check button.active.no { background: var(--coral); border-color: var(--coral); }
 .feedback-line { margin: 12px 0; padding: 16px 18px; border-radius: 13px; }
 .feedback-line.good { color: #19584f; background: #e2f0ea; }
 .feedback-line.improve { color: #714936; background: #fff0e7; }
@@ -188,6 +195,9 @@ svg { width: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-li
 .feedback-source.gemini { color: #19584f; background: #e2f0ea; }
 .voice-feedback .primary-button { margin-top: 18px; }
 .voice-complete > span { width: 72px; height: 72px; margin: 0 auto 20px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--teal); font-size: 30px; }
+.xp-reward { width: fit-content; margin: 18px auto; padding: 12px 20px; border-radius: 16px; display: grid; gap: 2px; color: var(--teal); background: #e2f0ea; }
+.xp-reward b { font-size: 24px; }
+.xp-reward span { color: #60716b; font-size: 11px; }
 .voice-complete .next-lesson { margin: 12px auto 0; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(229,142,115,.15); } }
 .exercise-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
@@ -317,7 +327,7 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
   .section-shell { padding: 80px 24px; }
   .section-heading, .progress-section { grid-template-columns: 1fr; gap: 22px; }
   .voice-coach-shell { grid-template-columns: 1fr; }
-  .voice-path { grid-template-columns: repeat(3, 1fr); padding: 18px; }
+  .voice-path { grid-template-columns: repeat(4, 1fr); padding: 18px; }
   .voice-path li { grid-template-columns: 38px 1fr; min-height: auto; }
   .voice-path b { width: 38px; height: 38px; }
   .voice-path li::after { display: none; }
