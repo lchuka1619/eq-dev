@@ -28,9 +28,14 @@ export async function POST(request: Request) {
     const text = body.text?.trim();
     if (!text || text.length > 500) return NextResponse.json({ error: "invalid_text" }, { status: 400 });
 
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent",
-      {
+    const models = ["gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"];
+    let response: Response | undefined;
+    const attempts: Array<{ model: string; status: number }> = [];
+
+    for (const model of models) {
+      const candidate = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
@@ -41,10 +46,18 @@ export async function POST(request: Request) {
           },
         }),
         signal: AbortSignal.timeout(20000),
-      },
-    );
-    if (!response.ok) {
-      console.error("Gemini TTS failed", response.status, (await response.text()).slice(0, 400));
+        },
+      );
+      if (candidate.ok) {
+        response = candidate;
+        break;
+      }
+      attempts.push({ model, status: candidate.status });
+      await candidate.text();
+    }
+
+    if (!response) {
+      console.error("Gemini TTS models failed", attempts);
       return NextResponse.json({ error: "tts_upstream_error" }, { status: 502 });
     }
     const data = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }> };
