@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     `Яригчийн өгүүлбэр: ${body.coachLine ?? ""}`,
     `Хэрэглэгчийн ${body.attempt === "retry" ? "дахин хэлсэн" : "эхний"} хариулт: ${response}`,
     body.previousResponse ? `Өмнөх хариулт: ${body.previousResponse}` : "",
-    "Зөвхөн JSON буцаа: positive нь нэг сайн тал, improve нь яг нэг хэрэгжүүлэх сайжруулалт.",
+    'Зөвхөн {"positive":"...","improve":"..."} хэлбэрийн JSON буцаа.',
   ].filter(Boolean).join("\n");
 
   try {
@@ -57,16 +57,22 @@ export async function POST(request: Request) {
                 improve: { type: "STRING" },
               },
             },
+            thinkingConfig: { thinkingBudget: 0 },
             temperature: 0.35,
-            maxOutputTokens: 180,
+            maxOutputTokens: 512,
           },
         }),
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(15000),
       },
     );
 
     if (!geminiResponse.ok) {
-      return NextResponse.json({ error: "gemini_unavailable" }, { status: 502 });
+      const details = (await geminiResponse.text()).slice(0, 500);
+      console.error("Gemini API request failed", geminiResponse.status, details);
+      return NextResponse.json(
+        { error: "gemini_upstream_error", upstreamStatus: geminiResponse.status },
+        { status: 502 },
+      );
     }
 
     const data = await geminiResponse.json() as {
@@ -74,7 +80,9 @@ export async function POST(request: Request) {
     };
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) throw new Error("empty_response");
-    const feedback = JSON.parse(text) as { positive?: string; improve?: string };
+
+    const cleanText = text.replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\s*\`\`\`$/, "");
+    const feedback = JSON.parse(cleanText) as { positive?: string; improve?: string };
     if (!feedback.positive || !feedback.improve) throw new Error("invalid_feedback");
 
     return NextResponse.json({
@@ -84,7 +92,9 @@ export async function POST(request: Request) {
       },
       source: "gemini",
     });
-  } catch {
-    return NextResponse.json({ error: "gemini_unavailable" }, { status: 502 });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown_error";
+    console.error("Gemini coach processing failed", reason);
+    return NextResponse.json({ error: "gemini_processing_error" }, { status: 502 });
   }
 }
