@@ -29,11 +29,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!client) return;
     let active = true;
-    void client.auth.getSession().then(({ data }) => {
+    void (async () => {
+      const currentUrl = new URL(window.location.href);
+      const code = currentUrl.searchParams.get("code");
+      if (code) {
+        const { error } = await client.auth.exchangeCodeForSession(code);
+        if (!error) {
+          currentUrl.searchParams.delete("code");
+          currentUrl.searchParams.delete("auth_error");
+          window.history.replaceState({}, "", `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+        }
+      }
+      const { data } = await client.auth.getSession();
       if (!active) return;
       setSession(data.session);
       setLoading(false);
-    });
+    })();
     const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setLoading(false);
