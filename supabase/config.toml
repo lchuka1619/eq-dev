@@ -1,0 +1,12 @@
+project_id = "lgcrhhmlxdtkomcakwwc"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+
+[auth]
+enabled = true
+site_url = "https://eq-dev-xi.vercel.app"
+additional_redirect_urls = ["http://localhost:3000/**", "https://eq-dev-xi.vercel.app/**"]
+
