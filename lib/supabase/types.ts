@@ -27,4 +27,8 @@ export type PracticeSessionRow = {
   reflection: string | null;
   metadata: Record<string, unknown>;
   completed_at: string;
+  plan_id?: string | null;
+  plan_day?: number | null;
+  self_rating_before?: number | null;
+  self_rating_after?: number | null;
 };

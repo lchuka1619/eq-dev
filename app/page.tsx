@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/auth/account-menu";
+import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
 import { useCloudProgress } from "@/lib/progress/cloud-progress";
+import { useLearningPlan } from "@/lib/plan/cloud-plan";
+import { todayKey } from "@/lib/plan/learning-plan";
 
 type VoicePhase = "ready" | "respond" | "feedback" | "retry" | "complete";
 type ArenaPhase = "idle" | "checkin" | "brief" | "scene" | "complete";
@@ -446,6 +449,33 @@ export default function Home() {
     setDaily: setProgress,
     setArena: setArenaProgress,
   });
+  const {
+    preferences,
+    plan,
+    onboardingOpen,
+    setOnboardingOpen,
+    finishOnboarding,
+    skipOnboarding,
+    completeToday,
+  } = useLearningPlan();
+  const todayPlanDay = plan?.days[Math.min((plan.currentDay || 1) - 1, 6)] ?? null;
+  const planCompletedToday = plan?.completions.some((item) => item.date === todayKey()) ?? false;
+  const goalLabel = preferences?.primaryGoal === "work" ? "Ажил дээр илүү итгэлтэй харилцах"
+    : preferences?.primaryGoal === "close-relationships" ? "Ойрын хүмүүстэйгээ тайван ойлголцох"
+      : preferences?.primaryGoal === "new-people" ? "Шинэ хүнтэй яриа эхлүүлэх" : "Өдөр бүр бага багаар харилцаагаа хөгжүүлэх";
+  const weeklyReport = useMemo(() => {
+    if (!plan?.completions.length) return null;
+    const counts = plan.completions.reduce<Record<string, number>>((result, item) => {
+      result[item.skill] = (result[item.skill] ?? 0) + 1;
+      return result;
+    }, {});
+    const topSkill = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "Харилцаа";
+    const rated = plan.completions.filter((item) => item.ratingBefore !== null && item.ratingAfter !== null);
+    const ratingChange = rated.length
+      ? rated.reduce((sum, item) => sum + Number(item.ratingAfter) - Number(item.ratingBefore), 0) / rated.length
+      : null;
+    return { topSkill, ratingChange };
+  }, [plan]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -565,6 +595,15 @@ export default function Home() {
     document.getElementById("voice-coach")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const startTodayPractice = () => {
+    if (!plan || !todayPlanDay) {
+      setOnboardingOpen(true);
+      return;
+    }
+    chooseLesson(todayPlanDay.lessonIndex % microLessons.length);
+    window.setTimeout(openVoiceCoach, 0);
+  };
+
   const playCoachLine = async () => {
     setVoicePhase("respond");
     setIsSpeaking(true);
@@ -650,6 +689,38 @@ export default function Home() {
     }
   };
 
+  const finishVoicePractice = () => {
+    const today = dateKey();
+    const next = {
+      ...progress,
+      completedDates: Array.from(new Set([...progress.completedDates, today])),
+      sessions: progress.sessions + 1,
+    };
+    const activePlanId = plan?.id ?? null;
+    const activePlanDay = plan?.currentDay ?? null;
+    setProgress(next);
+    try { window.localStorage.setItem("hariltsaa-progress-v1", JSON.stringify(next)); } catch {}
+    completeToday(null, null);
+    syncSession({
+      client_event_id: crypto.randomUUID(),
+      session_type: "daily",
+      exercise_id: `voice-lesson-${lessonIndex + 1}`,
+      level: null,
+      intensity_before: null,
+      intensity_after: null,
+      repetitions: voicePhase === "retry" ? 2 : 1,
+      xp_earned: 10,
+      reflection: null,
+      metadata: { completion: voicePhase === "retry" ? "voice-retry" : "voice-first", skill: todayPlanDay?.skill ?? lesson.skill },
+      completed_at: new Date().toISOString(),
+      plan_id: activePlanId,
+      plan_day: activePlanDay,
+      self_rating_before: null,
+      self_rating_after: null,
+    }, next, arenaProgress);
+    setVoicePhase("complete");
+  };
+
   const submitVoiceResponse = async () => {
     if (!voiceResponse.trim()) return;
     setFeedbackLoading(true);
@@ -682,28 +753,7 @@ export default function Home() {
     setFeedbackSource(source);
     setFeedbackLoading(false);
     if (voicePhase === "retry") {
-      const today = dateKey();
-      const next = {
-        ...progress,
-        completedDates: Array.from(new Set([...progress.completedDates, today])),
-        sessions: progress.sessions + 1,
-      };
-      setProgress(next);
-      try { window.localStorage.setItem("hariltsaa-progress-v1", JSON.stringify(next)); } catch {}
-      syncSession({
-        client_event_id: crypto.randomUUID(),
-        session_type: "daily",
-        exercise_id: `voice-lesson-${lessonIndex + 1}`,
-        level: null,
-        intensity_before: null,
-        intensity_after: null,
-        repetitions: 2,
-        xp_earned: 10,
-        reflection: null,
-        metadata: { completion: "voice-retry" },
-        completed_at: new Date().toISOString(),
-      }, next, arenaProgress);
-      setVoicePhase("complete");
+      finishVoicePractice();
     } else {
       setFirstVoiceResponse(voiceResponse.trim());
       setVoicePhase("feedback");
@@ -1089,6 +1139,9 @@ export default function Home() {
     } catch {
       // Saving is optional; completion feedback remains visible.
     }
+    const activePlanId = plan?.id ?? null;
+    const activePlanDay = plan?.currentDay ?? null;
+    completeToday(null, rating);
     syncSession({
       client_event_id: crypto.randomUUID(),
       session_type: "daily",
@@ -1101,6 +1154,10 @@ export default function Home() {
       reflection: reflection.trim() || null,
       metadata: { completion: "daily" },
       completed_at: new Date().toISOString(),
+      plan_id: activePlanId,
+      plan_day: activePlanDay,
+      self_rating_before: null,
+      self_rating_after: rating,
     }, next, arenaProgress);
     setPracticeStep(3);
   };
@@ -1109,6 +1166,7 @@ export default function Home() {
 
   return (
     <main>
+      <OnboardingModal open={onboardingOpen} onComplete={finishOnboarding} onSkip={skipOnboarding} />
       <header className="site-header">
         <a className="brand" href="#top" aria-label="Нүүр хэсэг">
           <span className="brand-mark">Ө</span>
@@ -1136,17 +1194,22 @@ export default function Home() {
 
           <article className="featured-practice">
             <div>
-              <p className="card-kicker">1 МИНУТЫН МИКРО ДАСГАЛ</p>
-              <h2>AI-тай богино ярилцах</h2>
-              <div className="mini-steps" aria-label="Дасгалын 3 алхам">
-                <span><b>1</b> Сонсох</span>
-                <span><b>2</b> Хариулах</span>
-                <span><b>3</b> Дахин хэлэх</span>
+              <p className="card-kicker">{plan ? `ӨНӨӨДРИЙН ${preferences?.dailyMinutes ?? 3} МИНУТЫН ДАСГАЛ · ӨДӨР ${plan.currentDay}/7` : "ТАНЫ ХУВИЙН ДАСГАЛЫН ЗАМ"}</p>
+              <h2>{todayPlanDay?.title ?? "7 өдрийн замаа эхлүүлэх"}</h2>
+              <p className="plan-goal">Таны зорилго: {goalLabel}</p>
+              <p className="today-reason">{todayPlanDay?.reason ?? "Гурван богино сонголтоор өдөр бүр юу хийхээ тодорхой болгоно."}</p>
+              <div className="today-meta">
+                <span>{preferences?.dailyMinutes ?? 3} минут</span>
+                <span>{plan?.completions.length ?? 0}/7 өдөр</span>
+                <span>{streak} өдөр дараалан</span>
               </div>
             </div>
-            <button className="primary-button light" onClick={openVoiceCoach}>
-              1 минут турших <IconArrow />
-            </button>
+            <div className="today-actions">
+              <button className="primary-button light" onClick={startTodayPractice} disabled={planCompletedToday && plan?.status === "completed"}>
+                {planCompletedToday ? "Дахин давтах" : plan ? "Өнөөдрийн дасгалыг эхлүүлэх" : "Замаа үүсгэх"} <IconArrow />
+              </button>
+              {plan && <button className="today-change" type="button" onClick={() => { chooseLesson((lessonIndex + 1) % microLessons.length); window.setTimeout(openVoiceCoach, 0); }}>Дасгалаа өөрчлөх</button>}
+            </div>
           </article>
         </div>
 
@@ -1478,7 +1541,11 @@ export default function Home() {
                   <blockquote>“{firstVoiceResponse}”</blockquote>
                   <div className="feedback-line good"><b>✓ Сайн болсон</b><p>{voiceFeedback.positive}</p></div>
                   <div className="feedback-line improve"><b>→ Нэг сайжруулалт</b><p>{voiceFeedback.improve}</p></div>
-                  <button className="primary-button" onClick={beginRetry}>Нэг удаа дахин хэлэх <IconArrow /></button>
+                  <div className="feedback-line model"><b>↗ Дахин хэлэх хувилбар</b><p>“{lesson.placeholder}”</p></div>
+                  <div className="feedback-actions">
+                    <button className="primary-button" onClick={beginRetry}>Дахин оролдох <IconArrow /></button>
+                    <button className="text-button" onClick={finishVoicePractice}>Өнөөдрийн дасгалыг дуусгах</button>
+                  </div>
                 </div>
               )}
 
@@ -1767,6 +1834,21 @@ export default function Home() {
             ))}
           </div>
         </div>
+        {plan && weeklyReport && (
+          <article className={`weekly-report ${plan.status === "completed" ? "complete" : ""}`}>
+            <div>
+              <span>{plan.status === "completed" ? "7 ӨДРИЙН ТАЙЛАН" : "ЭНЭ ЗАМЫН АХИЦ"}</span>
+              <h3>{plan.completions.length} дасгал хийсэн</h3>
+              <p>{plan.status === "completed" ? "Та долоо хоногийн замаа дуусгалаа. Өмнөх ахиц тань хадгалагдсан." : "Өнөөдөр амжаагүй байсан ч шийтгэлгүй. Нэг богино дасгалаар үргэлжлүүлээрэй."}</p>
+            </div>
+            <dl>
+              <div><dt>Хамгийн их давтсан чадвар</dt><dd>{weeklyReport.topSkill}</dd></div>
+              <div><dt>Өөрийн үнэлгээний өөрчлөлт</dt><dd>{weeklyReport.ratingChange === null ? "Үнэлгээ цугларч байна" : `${weeklyReport.ratingChange >= 0 ? "+" : ""}${weeklyReport.ratingChange.toFixed(1)}`}</dd></div>
+              <div><dt>AI-ийн ажигласан сайн тал</dt><dd>Дахин оролдож, санаагаа товчлох</dd></div>
+              <div><dt>Дараагийн анхаарах чадвар</dt><dd>{plan.days[Math.min(plan.currentDay, 6)].skill}</dd></div>
+            </dl>
+          </article>
+        )}
         <div className="arena-progress-card">
           <div><span>БАГИЙН ӨДРИЙН ХООЛ</span><strong>Recovery Strength</strong><p>Өөр өдөр бүрэн сэргээх мөчийг давтахад батжина.</p></div>
           <div className="recovery-meter" aria-label={`Recovery Strength ${arenaProgress.recoveryStrength} / 5`}>

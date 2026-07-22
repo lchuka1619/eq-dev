@@ -77,6 +77,17 @@ svg { width: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-li
 .auth-message { margin-top: 14px; padding: 11px 12px; border-radius: 10px; font-size: 13px; }
 .auth-message.success { background: #e5f3eb; color: #155c48; }
 .auth-message.error { background: #fff0ec; color: #904535; }
+.onboarding-backdrop { z-index: 110; }
+.onboarding-modal { width: min(620px, 100%); padding: 38px; border-radius: 26px; background: #fff; box-shadow: 0 30px 90px rgba(18,49,45,.28); }
+.onboarding-modal h2 { margin: 0 0 24px; font-size: 34px; letter-spacing: -.04em; }
+.onboarding-progress { margin-bottom: 25px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.onboarding-progress i { height: 5px; border-radius: 9px; background: #e5e8e2; }
+.onboarding-progress i.active { background: var(--teal-bright); }
+.onboarding-options { display: grid; gap: 10px; }
+.onboarding-options button { min-height: 58px; padding: 10px 16px; border: 1px solid var(--border); border-radius: 14px; background: #fff; color: var(--ink); text-align: left; font-weight: 670; cursor: pointer; }
+.onboarding-options button.selected { border-color: var(--teal-bright); background: var(--mint-pale); box-shadow: inset 0 0 0 1px var(--teal-bright); }
+.onboarding-actions { margin-top: 25px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.onboarding-modal > small { display: block; margin-top: 18px; color: var(--muted); }
 
 .hero {
   min-height: 720px;
@@ -112,6 +123,12 @@ svg { width: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-li
 .mini-steps { display: flex; gap: 28px; color: #d4e7e2; font-size: 12px; }
 .mini-steps span { display: flex; align-items: center; gap: 7px; }
 .mini-steps b { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.25); }
+.plan-goal { margin: -10px 0 8px; color: #b8dbd1; font-size: 12px; }
+.today-reason { max-width: 580px; margin: 0 0 16px; color: #d4e7e2; line-height: 1.5; }
+.today-meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.today-meta span { padding: 6px 9px; border: 1px solid rgba(255,255,255,.2); border-radius: 999px; color: #d4e7e2; font-size: 11px; }
+.today-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; position: relative; z-index: 2; }
+.today-change { padding: 8px 2px; border: 0; background: transparent; color: #d4e7e2; text-decoration: underline; cursor: pointer; }
 .primary-button, .text-button {
   border: 0;
   border-radius: 13px;
@@ -440,6 +457,16 @@ textarea { width: 100%; resize: vertical; padding: 14px 16px; margin-bottom: 18p
 .weekly-card { grid-column: 1 / -1; padding: 30px 34px; border-radius: 22px; background: var(--cream); display: grid; grid-template-columns: 230px 1fr; align-items: center; gap: 30px; }
 .weekly-card > div:first-child span { display: block; color: var(--teal-bright); font-size: 11px; font-weight: 750; letter-spacing: .14em; }
 .weekly-card > div:first-child strong { display: block; margin-top: 8px; font-size: 23px; }
+.weekly-report { grid-column: 1 / -1; padding: 28px 32px; border: 1px solid #d2ded8; border-radius: 22px; background: #fff; display: grid; grid-template-columns: .7fr 1.3fr; gap: 30px; }
+.weekly-report.complete { background: #edf6f1; }
+.weekly-report > div > span { color: var(--teal-bright); font-size: 11px; font-weight: 760; letter-spacing: .14em; }
+.weekly-report h3 { margin: 7px 0; font-size: 27px; }
+.weekly-report p { margin: 0; color: var(--muted); line-height: 1.55; }
+.weekly-report dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.weekly-report dl div { padding: 13px; border-radius: 12px; background: rgba(231,238,232,.7); }
+.weekly-report dt { color: var(--muted); font-size: 11px; }
+.weekly-report dd { margin: 5px 0 0; color: var(--teal); font-weight: 720; }
+.feedback-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
 .large-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
 .large-week div { display: grid; gap: 8px; justify-items: center; color: var(--muted); font-size: 12px; }
 .large-week i { width: 43px; height: 43px; border-radius: 50%; display: grid; place-items: center; background: #e6e2d9; color: #fff; font-style: normal; font-weight: 750; }
@@ -535,6 +562,10 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
 }
 
 @media (max-width: 600px) {
+  .onboarding-modal { padding: 28px 18px; }
+  .onboarding-modal h2 { font-size: 28px; }
+  .onboarding-actions { align-items: stretch; flex-direction: column-reverse; }
+  .today-actions { align-items: stretch; flex-direction: column; width: 100%; }
   .brand-mark, .profile-dot { width: 38px; height: 38px; }
   .brand { gap: 8px; font-size: 16px; }
   .hero { padding-inline: 18px; }
@@ -581,6 +612,8 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
   .progress-stats { grid-template-columns: 1fr; }
   .progress-stats div + div, .progress-stats div:nth-child(3), .progress-stats div:nth-child(4) { border-left: 0; border-top: 1px solid var(--border); }
   .weekly-card { padding: 24px 18px; }
+  .weekly-report { padding: 22px 17px; grid-template-columns: 1fr; }
+  .weekly-report dl { grid-template-columns: 1fr; }
   .large-week { gap: 5px; }
   .large-week i { width: 34px; height: 34px; }
   .arena-progress-card { padding: 22px 17px; }
