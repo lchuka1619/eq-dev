@@ -18,6 +18,8 @@
     "db:migrate:dry-run": "supabase db push --dry-run"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.8",
     "drizzle-orm": "0.45.2",
     "next": "16.2.6",
     "react": "19.2.6",

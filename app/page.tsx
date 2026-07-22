@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AccountMenu } from "@/components/auth/account-menu";
+import { useCloudProgress } from "@/lib/progress/cloud-progress";
 
 type VoicePhase = "ready" | "respond" | "feedback" | "retry" | "complete";
 type ArenaPhase = "idle" | "checkin" | "brief" | "scene" | "complete";
@@ -364,6 +366,7 @@ export default function Home() {
   const [rating, setRating] = useState(0);
   const [reflection, setReflection] = useState("");
   const [progress, setProgress] = useState<Progress>(emptyProgress);
+  const [localProgressHydrated, setLocalProgressHydrated] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null);
   const [roleFeedback, setRoleFeedback] = useState<RoleOption | null>(null);
   const [videoId, setVideoId] = useState(defaultVideoId);
@@ -436,6 +439,14 @@ export default function Home() {
     ? (submittedFeedback.reduce((sum, event) => sum + Number(event.properties.rating ?? 0), 0) / submittedFeedback.length).toFixed(1)
     : "—";
 
+  const { syncSession } = useCloudProgress({
+    hydrated: localProgressHydrated,
+    daily: progress,
+    arena: arenaProgress,
+    setDaily: setProgress,
+    setArena: setArenaProgress,
+  });
+
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       try {
@@ -454,6 +465,7 @@ export default function Home() {
       } catch {
         // The experience still works if browser storage is unavailable.
       }
+      setLocalProgressHydrated(true);
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
@@ -678,6 +690,19 @@ export default function Home() {
       };
       setProgress(next);
       try { window.localStorage.setItem("hariltsaa-progress-v1", JSON.stringify(next)); } catch {}
+      syncSession({
+        client_event_id: crypto.randomUUID(),
+        session_type: "daily",
+        exercise_id: `voice-lesson-${lessonIndex + 1}`,
+        level: null,
+        intensity_before: null,
+        intensity_after: null,
+        repetitions: 2,
+        xp_earned: 10,
+        reflection: null,
+        metadata: { completion: "voice-retry" },
+        completed_at: new Date().toISOString(),
+      }, next, arenaProgress);
       setVoicePhase("complete");
     } else {
       setFirstVoiceResponse(voiceResponse.trim());
@@ -959,7 +984,7 @@ export default function Home() {
       : arenaProgress.recoveryDates;
     const sessionXp = repetitions * 8 + (arenaReflection.trim() ? 2 : 0);
     const sessionRecord: ArenaSessionRecord = {
-      id: `${Date.now()}-${arenaProgress.sessions + 1}`,
+      id: crypto.randomUUID(),
       date: today,
       completion: arenaCompletion,
       level: arenaLevel,
@@ -1005,6 +1030,19 @@ export default function Home() {
     } catch {
       // The result remains visible even if browser storage is unavailable.
     }
+    syncSession({
+      client_event_id: sessionRecord.id,
+      session_type: "arena",
+      exercise_id: "team-lunch",
+      level: arenaLevel,
+      intensity_before: arenaIntensity,
+      intensity_after: arenaIntensityAfter,
+      repetitions,
+      xp_earned: sessionXp,
+      reflection: arenaReflection.trim() || null,
+      metadata: { completion: arenaCompletion },
+      completed_at: new Date().toISOString(),
+    }, nextProgress, nextArena);
   };
 
   const changeVideo = () => {
@@ -1051,6 +1089,19 @@ export default function Home() {
     } catch {
       // Saving is optional; completion feedback remains visible.
     }
+    syncSession({
+      client_event_id: crypto.randomUUID(),
+      session_type: "daily",
+      exercise_id: `daily-${exerciseIndex + 1}`,
+      level: null,
+      intensity_before: null,
+      intensity_after: rating,
+      repetitions: 1,
+      xp_earned: 10,
+      reflection: reflection.trim() || null,
+      metadata: { completion: "daily" },
+      completed_at: new Date().toISOString(),
+    }, next, arenaProgress);
     setPracticeStep(3);
   };
 
@@ -1069,7 +1120,7 @@ export default function Home() {
           <a href="#roleplay">Дүрд тоглох</a>
           <a href="#progress">Ахиц</a>
         </nav>
-        <div className="profile-dot" aria-label="Хэрэглэгч">Ч</div>
+        <AccountMenu />
       </header>
 
       <section className="hero" id="top">

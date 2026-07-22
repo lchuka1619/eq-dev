@@ -38,7 +38,7 @@ svg { width: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-li
   margin: 0 auto;
   padding: 0 32px;
   display: grid;
-  grid-template-columns: 1fr auto 50px;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 46px;
   border-bottom: 1px solid rgba(20, 64, 58, 0.11);
@@ -50,7 +50,33 @@ svg { width: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-li
 .site-header nav { display: flex; gap: 38px; }
 .site-header nav a { color: var(--ink); text-decoration: none; font-weight: 570; font-size: 15px; }
 .site-header nav a:hover { color: var(--teal-bright); }
-.profile-dot { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--teal); color: white; font-weight: 720; }
+.profile-dot { width: 46px; height: 46px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--teal); color: white; font-weight: 720; cursor: pointer; }
+.cloud-save-button { min-height: 42px; padding: 0 15px; border: 1px solid #b8cec6; border-radius: 999px; background: #fff; color: var(--teal); font-size: 12px; font-weight: 720; cursor: pointer; white-space: nowrap; }
+.cloud-save-button:hover { background: var(--mint-pale); }
+.account-menu { position: relative; }
+.account-popover { position: absolute; right: 0; top: 56px; width: 260px; padding: 18px; border: 1px solid var(--border); border-radius: 16px; background: #fff; box-shadow: var(--shadow); display: grid; gap: 7px; z-index: 30; }
+.account-popover strong { overflow-wrap: anywhere; }
+.account-popover > span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.account-popover > button { justify-self: start; padding: 0; border: 0; background: transparent; color: #8d4032; font-weight: 700; cursor: pointer; }
+.sync-state { margin: 6px 0; padding: 9px 10px; border-radius: 10px; background: var(--mint-pale); color: var(--teal); font-size: 12px; }
+.sync-state.pending { background: #fff1dc; color: #80511c; }
+.sync-state.syncing { opacity: .75; }
+
+.auth-backdrop { z-index: 100; }
+.auth-modal { position: relative; width: min(470px, 100%); padding: 34px; border-radius: 24px; background: #fff; box-shadow: 0 30px 90px rgba(18, 49, 45, .28); }
+.auth-modal h2 { margin: 0 0 12px; font-size: 30px; letter-spacing: -.035em; }
+.auth-modal > p:not(.small-label) { color: var(--muted); line-height: 1.6; }
+.auth-close { position: absolute; right: 16px; top: 14px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: #f2f3ef; color: var(--ink); font-size: 22px; cursor: pointer; }
+.auth-google { width: 100%; min-height: 50px; margin-top: 10px; border: 1px solid var(--border); border-radius: 13px; background: #fff; color: var(--ink); font-weight: 720; cursor: pointer; }
+.auth-divider { margin: 18px 0; display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.auth-modal form { display: grid; gap: 10px; }
+.auth-modal form label { font-size: 12px; font-weight: 720; }
+.auth-modal input { width: 100%; min-height: 48px; padding: 0 14px; border: 1px solid var(--border); border-radius: 12px; font: inherit; }
+.auth-modal small { display: block; margin-top: 18px; color: var(--muted); }
+.auth-message { margin-top: 14px; padding: 11px 12px; border-radius: 10px; font-size: 13px; }
+.auth-message.success { background: #e5f3eb; color: #155c48; }
+.auth-message.error { background: #fff0ec; color: #904535; }
 
 .hero {
   min-height: 720px;
