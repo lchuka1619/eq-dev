@@ -128,6 +128,14 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     assert.equal(await page.getByRole("dialog").count(), 0);
     await page.getByRole("link", { name: "← Өнөөдөр" }).click();
     await page.waitForURL(`${baseUrl}/today`);
+    await page.goto(`${baseUrl}/practice/personal?route=future_rehearsal`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Ойрын нөхцөлөө хоёр минутад бэлдэе" }).waitFor();
+    await page.getByLabel(/Хамгийн хэцүү санагдаж буй мөч/).fill("Хоёр хүн зэрэг ярьсны дараа санаагаа оруулах");
+    await page.getByLabel(/Бэлэн байлгах эхний өгүүлбэр/).fill("Таны хэлсэнтэй холбоод нэг санаа нэмье.");
+    await page.getByRole("button", { name: "Хадгалахгүй үргэлжлүүлэх" }).click();
+    await page.getByRole("img", { name: /Тайван хурлын өрөөнд/ }).waitFor();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("eq-personal-practice-pilot-v1")).context), null);
+    await page.goto(`${baseUrl}/today`, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Past Event Repair эхлэх" }).click();
     await page.waitForURL(`${baseUrl}/practice/personal?route=past_repair`);
     await page.getByRole("heading", { name: "Өмнөх эвентийн нэг жижиг мөчийг сонгоё" }).waitFor();

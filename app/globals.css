@@ -681,11 +681,12 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
 .moment-grid button.selected { background: #e9f3ef; border-color: #17675e; }
 .fact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .fact-grid label, .rehearsal-card > label { color: #263f3a; display: grid; font-weight: 700; gap: 8px; }
-.pilot-card textarea {
+.pilot-card textarea, .pilot-card input:not([type="range"]):not([type="checkbox"]), .pilot-card select {
   background: white; border: 1px solid #ccc8bd; border-radius: 14px; color: #183a34;
-  font: inherit; padding: 14px; resize: vertical; width: 100%;
+  font: inherit; padding: 14px; width: 100%;
 }
-.pilot-card textarea:focus-visible, .pilot-card button:focus-visible, .pilot-card input:focus-visible {
+.pilot-card textarea { resize: vertical; }
+.pilot-card textarea:focus-visible, .pilot-card button:focus-visible, .pilot-card input:focus-visible, .pilot-card select:focus-visible {
   outline: 3px solid #f0a88f; outline-offset: 3px;
 }
 .pilot-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; margin-top: 24px; }
@@ -695,6 +696,9 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
 }
 .danger-link { background: none; border: 0; color: #a34236; cursor: pointer; margin-top: 18px; text-decoration: underline; }
 .variation-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0; }
+.context-brief { margin: 20px 0; padding: 16px 18px; border-left: 4px solid var(--teal-bright); border-radius: 0 14px 14px 0; background: #f3f7f4; display: grid; gap: 5px; }
+.context-brief span { color: var(--teal-bright); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.context-brief p { margin: 0; color: var(--muted); }
 .scene-line { background: #eef4f0; border-radius: 18px; color: #24453e; font-size: 18px; line-height: 1.65; padding: 22px; }
 .complication { color: #8a4537; font-weight: 750; }
 .intensity-row {

@@ -36,6 +36,7 @@ export async function syncPersonalPractice(
         attempt_count: state.attempts.length,
         bridge_accepted: state.bridgeAccepted,
         surprise_opt_in: state.surpriseOptIn,
+        context: state.context?.saveChoice === "cloud" ? state.context : undefined,
     },
   }, { onConflict: "id" });
   if (journeyError) return false;

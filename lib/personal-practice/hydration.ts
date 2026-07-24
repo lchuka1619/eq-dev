@@ -1,12 +1,13 @@
 import type { PersonalAttempt, PersonalPracticeState, RepairDraft } from "./persistence.ts";
 import { createVariation, type RehearsalStage } from "./variation-engine.ts";
 import type { SceneRenderer } from "./variation-engine.ts";
+import type { PracticeContext } from "../context-to-mastery/practice-context.ts";
 
 export type CloudJourney = {
   id: string;
   target_skill_id: string;
   current_stage: RehearsalStage;
-  state: { bridge_accepted?: boolean | null; surprise_opt_in?: boolean } | null;
+  state: { bridge_accepted?: boolean | null; surprise_opt_in?: boolean; context?: PracticeContext } | null;
 };
 
 export type CloudAttempt = {
@@ -73,6 +74,7 @@ export function mergeHydratedPersonalPractice(
     journeyId: journey.id,
     targetSkillId: journey.target_skill_id,
     stage: journey.current_stage,
+    context: journey.state?.context ?? local.context,
     repair: cloudRepair,
     attempts: mergedAttempts,
     bridgeAccepted: journey.state?.bridge_accepted ?? local.bridgeAccepted,

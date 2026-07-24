@@ -28,8 +28,14 @@ import {
   type RehearsalStage,
   type SceneRenderer,
 } from "@/lib/personal-practice/variation-engine";
+import {
+  contextForStorage,
+  normalizePracticeContext,
+  type ContextSaveChoice,
+  type PracticeContext,
+} from "@/lib/context-to-mastery/practice-context";
 
-type Step = "intro" | "bridge-reflection" | "repair" | "media" | "practice" | "connected" | "result";
+type Step = "intro" | "bridge-reflection" | "repair" | "future-context" | "media" | "practice" | "connected" | "result";
 
 type Props = {
   isDaySeven?: boolean;
@@ -53,12 +59,25 @@ const blankRepair: RepairDraft = {
   saveChoice: "device",
 };
 
+const blankFutureContext: PracticeContext = {
+  entryRoute: "future_rehearsal",
+  eventType: "Байгууллагын эвент",
+  peopleOrRoles: ["хамтрагч", "багийн ахлах"],
+  fearedMoment: "",
+  intendedOpening: "",
+  desiredAction: "Өмнөх яриатай холбож нэг тодорхой санаа нэмэх",
+  intensity: 4,
+  saveChoice: "device",
+};
+
 export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, onPracticeFinished }: Props) {
   const { user, setSyncState } = useAuth();
   const [state, setState] = useState<PersonalPracticeState>(() => emptyPersonalPracticeState(TARGET_SKILL_ID));
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState<Step>("intro");
   const [repair, setRepair] = useState<RepairDraft>(blankRepair);
+  const [practiceContext, setPracticeContext] = useState<PracticeContext | null>(null);
+  const [futureContext, setFutureContext] = useState<PracticeContext>(blankFutureContext);
   const [anxietyBefore, setAnxietyBefore] = useState(4);
   const [anxietyAfter, setAnxietyAfter] = useState(4);
   const [response, setResponse] = useState("");
@@ -84,6 +103,10 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
       const saved = readPersonalPracticeState(TARGET_SKILL_ID);
       setState(saved);
       if (saved.repair) setRepair(saved.repair);
+      if (saved.context) {
+        setPracticeContext(saved.context);
+        if (saved.context.entryRoute === "future_rehearsal") setFutureContext(saved.context);
+      }
       setReady(true);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -101,6 +124,10 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
       .then((hydrated) => {
         setState(hydrated);
         if (hydrated.repair) setRepair(hydrated.repair);
+        if (hydrated.context) {
+          setPracticeContext(hydrated.context);
+          if (hydrated.context.entryRoute === "future_rehearsal") setFutureContext(hydrated.context);
+        }
         writePersonalPracticeState(hydrated);
         setSyncState("synced");
       })
@@ -110,13 +137,13 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
   useEffect(() => {
     const startFromToday = (event: Event) => {
       const route = (event as CustomEvent<{ route?: string }>).detail?.route;
-      setStep(route === "past_repair" ? "repair" : "media");
+      setStep(route === "past_repair" ? "repair" : "future-context");
     };
     window.addEventListener("eq:start-personal-practice", startFromToday);
     const initialRoute = new URLSearchParams(window.location.search).get("route");
     const frame = window.requestAnimationFrame(() => {
       if (initialRoute === "past_repair") setStep("repair");
-      if (initialRoute === "future_rehearsal") setStep("media");
+      if (initialRoute === "future_rehearsal") setStep("future-context");
     });
     return () => {
       window.cancelAnimationFrame(frame);
@@ -136,9 +163,33 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
 
   const continueFromRepair = (choice: RepairDraft["saveChoice"]) => {
     const nextRepair = { ...repair, saveChoice: choice };
+    const context = normalizePracticeContext({
+      entryRoute: "past_repair",
+      eventType: "Байгууллагын ideation / event",
+      decisiveMoment: repair.selectedMoment,
+      observableFact: repair.fact,
+      conclusion: repair.conclusion,
+      desiredAction: "Өмнөх яриатай холбож нэг тодорхой санаа нэмэх",
+      intensity: anxietyBefore,
+      saveChoice: choice,
+    });
     setRepair(nextRepair);
-    const next = { ...state, repair: choice === "none" ? null : nextRepair };
+    setPracticeContext(context);
+    const next = {
+      ...state,
+      context: contextForStorage(context),
+      repair: choice === "none" ? null : nextRepair,
+    };
     saveState(next);
+    setStep("media");
+  };
+
+  const continueFromFuture = (choice: ContextSaveChoice) => {
+    const context = normalizePracticeContext({ ...futureContext, saveChoice: choice });
+    setFutureContext(context);
+    setPracticeContext(context);
+    saveState({ ...state, context: contextForStorage(context) });
+    setAnxietyBefore(context.intensity ?? 4);
     setStep("media");
   };
 
@@ -333,6 +384,47 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
         </article>
       )}
 
+      {step === "future-context" && (
+        <article className="pilot-card repair-card" aria-labelledby="future-context-title">
+          <div className="pilot-step"><b>1</b><span>Future Rehearsal<small>Нэр болон таних мэдээлэл заавал оруулахгүй</small></span></div>
+          <h3 id="future-context-title">Ойрын нөхцөлөө хоёр минутад бэлдэе</h3>
+          <p>Бүх түүхийг бичих шаардлагагүй. Хэцүү санагдах нэг мөч болон бэлэн байлгах эхний өгүүлбэрээ сонгоно.</p>
+          <div className="fact-grid">
+            <label>Эвентийн төрөл
+              <select value={futureContext.eventType ?? ""} onChange={(event) => setFutureContext({ ...futureContext, eventType: event.target.value })}>
+                <option>Байгууллагын эвент</option>
+                <option>Багийн хурал</option>
+                <option>Жижиг бүлгийн яриа</option>
+                <option>Нэг хүнтэй чухал уулзалт</option>
+              </select>
+            </label>
+            <label>Оролцох хүмүүсийн үүрэг <span>(таслалаар салгана)</span>
+              <input
+                value={futureContext.peopleOrRoles?.join(", ") ?? ""}
+                onChange={(event) => setFutureContext({ ...futureContext, peopleOrRoles: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })}
+                placeholder="хамтрагч, багийн ахлах"
+              />
+            </label>
+            <label>Хамгийн хэцүү санагдаж буй мөч
+              <textarea rows={3} value={futureContext.fearedMoment ?? ""} onChange={(event) => setFutureContext({ ...futureContext, fearedMoment: event.target.value })} placeholder="Жишээ: Хоёр хүн зэрэг ярьсны дараа өөрийн санаагаа оруулах" />
+            </label>
+            <label>Бэлэн байлгах эхний өгүүлбэр
+              <textarea rows={3} value={futureContext.intendedOpening ?? ""} onChange={(event) => setFutureContext({ ...futureContext, intendedOpening: event.target.value })} placeholder="Жишээ: Таны хэлсэнтэй холбоод нэг санаа нэмье…" />
+            </label>
+          </div>
+          <div className="intensity-row">
+            <label htmlFor="future-intensity">Хүлээгдэж буй түгшүүр</label><b>{futureContext.intensity ?? 4}/10</b>
+            <input id="future-intensity" type="range" min="0" max="10" value={futureContext.intensity ?? 4} onChange={(event) => setFutureContext({ ...futureContext, intensity: Number(event.target.value) })} />
+          </div>
+          <p className="privacy-note">“Хадгалахгүй” сонговол энэ context refresh болон дараагийн нээлтэд хадгалагдахгүй.</p>
+          <div className="pilot-actions">
+            <button type="button" className="text-button" onClick={() => continueFromFuture("none")}>Хадгалахгүй үргэлжлүүлэх</button>
+            <button type="button" className="secondary-button" onClick={() => continueFromFuture("device")}>Зөвхөн төхөөрөмжид хадгалах</button>
+            <button type="button" className="primary-button" disabled={!user} title={!user ? "Cloud-д хадгалахын тулд нэвтэрнэ үү" : undefined} onClick={() => continueFromFuture("cloud")}>Cloud-д хадгалаад үргэлжлүүлэх</button>
+          </div>
+        </article>
+      )}
+
       {step === "practice" && (
         <article className="pilot-card rehearsal-card">
           <div className="pilot-step"><b>3</b><span>{stageLabels[activeStage]} rehearsal<small>Чадвар: санаагаа тодорхой оруулах · {mediaMode === "image_audio" ? "image + optional audio" : "text-only"}</small></span></div>
@@ -344,6 +436,13 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
               <input type="checkbox" checked={state.surpriseOptIn} onChange={(event) => setSurpriseOptIn(event.target.checked)} />
               Тогтвортой болсны дараа нэг хөнгөн гэнэтийн хувилбар туршихыг зөвшөөрөх
             </label>
+          )}
+          {practiceContext && (
+            <div className="context-brief" aria-label="Таны сонгосон нөхцөл">
+              <span>{practiceContext.entryRoute === "past_repair" ? "ӨМНӨХ МӨЧ" : "ИРЭЭДҮЙН НӨХЦӨЛ"}</span>
+              <b>{practiceContext.decisiveMoment ?? practiceContext.fearedMoment ?? practiceContext.eventType}</b>
+              {(practiceContext.intendedOpening ?? practiceContext.desiredAction) && <p>{practiceContext.intendedOpening ?? practiceContext.desiredAction}</p>}
+            </div>
           )}
           <div className="variation-meta">
             <span>{variation.environment}</span><span>{variation.character}</span><span>{variation.tone}</span>
@@ -375,7 +474,7 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
       {step === "media" && (
         <MediaPreview
           intensity={anxietyBefore}
-          onBack={() => setStep(state.repair ? "repair" : "intro")}
+          onBack={() => setStep(practiceContext?.entryRoute === "future_rehearsal" ? "future-context" : state.repair ? "repair" : "intro")}
           onTextOnly={() => {
             setMediaMode("text_voice");
             setStep("practice");

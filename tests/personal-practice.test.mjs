@@ -8,6 +8,12 @@ import {
   writeActivePractice,
 } from "../lib/practice/active-practice.ts";
 import {
+  contextForStorage,
+  contextHasMeaningfulDetail,
+  dailySkillContext,
+  normalizePracticeContext,
+} from "../lib/context-to-mastery/practice-context.ts";
+import {
   TARGET_SKILL_ID,
   createVariation,
   decideProgression,
@@ -48,6 +54,30 @@ test("active practice resume marker accepts only canonical Personal Practice rou
     if (originalStorage === undefined) delete globalThis.localStorage;
     else globalThis.localStorage = originalStorage;
   }
+});
+
+test("PracticeContext normalizes sensitive short input and honours no-save choice", () => {
+  const context = normalizePracticeContext({
+    entryRoute: "future_rehearsal",
+    eventType: "  Багийн   хурал ",
+    peopleOrRoles: [" хамтрагч ", "", " багийн ахлах "],
+    fearedMoment: "  Хоёр хүн зэрэг ярьсны дараа   санаагаа оруулах ",
+    intendedOpening: " Таны хэлсэнтэй холбоод нэг санаа нэмье. ",
+    intensity: 14,
+    saveChoice: "none",
+  });
+  assert.equal(context.eventType, "Багийн хурал");
+  assert.deepEqual(context.peopleOrRoles, ["хамтрагч", "багийн ахлах"]);
+  assert.equal(context.intensity, 10);
+  assert.equal(contextHasMeaningfulDetail(context), true);
+  assert.equal(contextForStorage(context), null);
+});
+
+test("Daily Skill Loop provides a context-light shared contract", () => {
+  const context = dailySkillContext();
+  assert.equal(context.entryRoute, "daily_skill_loop");
+  assert.equal(contextHasMeaningfulDetail(context), true);
+  assert.equal(context.saveChoice, "device");
 });
 import { mergeHydratedPersonalPractice } from "../lib/personal-practice/hydration.ts";
 import { isPastEventPilotEnabled, recommendTodayRoute } from "../lib/personal-practice/today-router.ts";
