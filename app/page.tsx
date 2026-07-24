@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/auth/account-menu";
 import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
+import { PersonalPracticePilot } from "@/components/personal-practice/personal-practice-pilot";
 import { useCloudProgress } from "@/lib/progress/cloud-progress";
 import { useLearningPlan } from "@/lib/plan/cloud-plan";
 import { todayKey } from "@/lib/plan/learning-plan";
@@ -1234,6 +1235,8 @@ export default function Home() {
           </div>
         </aside>
       </section>
+
+      <PersonalPracticePilot />
 
       <section className="arena-section" id="arena">
         <div className="section-shell">

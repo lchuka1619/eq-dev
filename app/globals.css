@@ -16,9 +16,10 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: clip; }
 body {
   margin: 0;
+  overflow-x: clip;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-geist-sans), "Manrope", "Noto Sans", Arial, sans-serif;
@@ -562,6 +563,8 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
 }
 
 @media (max-width: 600px) {
+  .leaf { display: none; }
+  .arena-card::after, .featured-practice::after { display: none; }
   .onboarding-modal { padding: 28px 18px; }
   .onboarding-modal h2 { font-size: 28px; }
   .onboarding-actions { align-items: stretch; flex-direction: column-reverse; }
@@ -635,4 +638,83 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+/* Personal Practice pilot */
+.personal-pilot { padding-block: 88px; }
+.pilot-card {
+  border: 1px solid #d9d1c3;
+  border-radius: 28px;
+  background: #fffdf9;
+  padding: clamp(24px, 4vw, 48px);
+  box-shadow: 0 18px 60px rgb(31 54 49 / 7%);
+}
+.pilot-intro { display: flex; align-items: end; justify-content: space-between; gap: 36px; }
+.pilot-intro > div { max-width: 720px; }
+.pilot-card h3 { color: #153a34; font-size: clamp(26px, 3vw, 40px); margin: 12px 0; }
+.pilot-stage, .variation-meta span {
+  display: inline-flex;
+  border: 1px solid #b9cec8;
+  border-radius: 999px;
+  color: #17675e;
+  font-size: 13px;
+  padding: 7px 12px;
+}
+.safety-note, .privacy-note {
+  border-left: 3px solid #d68b72;
+  color: #5c625e;
+  font-size: 14px;
+  margin-top: 22px;
+  padding-left: 14px;
+}
+.pilot-step { display: flex; align-items: center; gap: 12px; color: #174c44; }
+.pilot-step > b {
+  align-items: center; background: #17675e; border-radius: 50%; color: white;
+  display: inline-flex; height: 38px; justify-content: center; width: 38px;
+}
+.pilot-step span { display: flex; flex-direction: column; font-weight: 750; }
+.pilot-step small { color: #707872; font-weight: 400; }
+.moment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 22px 0; }
+.moment-grid button {
+  background: white; border: 1px solid #d6d3c9; border-radius: 14px; color: #243d38;
+  padding: 16px; text-align: left;
+}
+.moment-grid button.selected { background: #e9f3ef; border-color: #17675e; }
+.fact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.fact-grid label, .rehearsal-card > label { color: #263f3a; display: grid; font-weight: 700; gap: 8px; }
+.pilot-card textarea {
+  background: white; border: 1px solid #ccc8bd; border-radius: 14px; color: #183a34;
+  font: inherit; padding: 14px; resize: vertical; width: 100%;
+}
+.pilot-card textarea:focus-visible, .pilot-card button:focus-visible, .pilot-card input:focus-visible {
+  outline: 3px solid #f0a88f; outline-offset: 3px;
+}
+.pilot-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+.secondary-button {
+  background: white; border: 1px solid #17675e; border-radius: 999px; color: #17675e;
+  cursor: pointer; font-weight: 750; padding: 12px 18px;
+}
+.danger-link { background: none; border: 0; color: #a34236; cursor: pointer; margin-top: 18px; text-decoration: underline; }
+.variation-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0; }
+.scene-line { background: #eef4f0; border-radius: 18px; color: #24453e; font-size: 18px; line-height: 1.65; padding: 22px; }
+.complication { color: #8a4537; font-weight: 750; }
+.intensity-row {
+  align-items: center; display: grid; gap: 8px; grid-template-columns: 1fr auto;
+  margin: 24px 0;
+}
+.intensity-row input { grid-column: 1 / -1; width: 100%; }
+.hint-toggle { background: none; border: 0; color: #17675e; cursor: pointer; font-weight: 750; padding: 8px 0; }
+.pilot-hint { background: #fff5df; border-radius: 16px; margin-bottom: 16px; padding: 16px; }
+.pilot-hint p { margin: 6px 0; }
+.result-stats { display: grid; gap: 10px; grid-template-columns: repeat(3, 1fr); margin: 24px 0; }
+.result-stats span { background: #eef4f0; border-radius: 14px; display: grid; padding: 16px; }
+.bridge-card { background: #f8eee9; border-radius: 20px; padding: 22px; }
+.bridge-card h4 { color: #153a34; font-size: 20px; margin: 6px 0; }
+.bridge-card .text-button { margin-left: 10px; }
+
+@media (max-width: 720px) {
+  .personal-pilot { padding-block: 56px; }
+  .pilot-intro { align-items: stretch; flex-direction: column; }
+  .moment-grid, .fact-grid, .result-stats { grid-template-columns: 1fr; }
+  .pilot-actions { align-items: stretch; flex-direction: column-reverse; }
+  .pilot-actions button { width: 100%; }
 }

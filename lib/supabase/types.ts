@@ -32,3 +32,23 @@ export type PracticeSessionRow = {
   self_rating_before?: number | null;
   self_rating_after?: number | null;
 };
+
+export type PersonalPracticeJourneyRow = {
+  id: string;
+  user_id: string;
+  target_skill_id: string;
+  current_stage: "guided" | "prompted" | "independent" | "light-surprise" | "connected-rehearsal";
+  state: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PastEventRepairRow = {
+  id: string;
+  user_id: string;
+  target_skill_id: string;
+  moments: string[];
+  selected_moment: string | null;
+  fact_text: string | null;
+  conclusion_text: string | null;
+};
