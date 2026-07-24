@@ -830,6 +830,18 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
 .practice-view-personal .personal-pilot, .practice-view-arena .arena-section, .practice-view-voice .voice-coach-section, .practice-view-daily .practice-section, .practice-view-roleplay .roleplay-section { min-height: calc(100vh - 76px); }
 .practice-view-personal .personal-pilot, .practice-view-daily .practice-section { padding-top: 70px; }
 .practice-view-arena .arena-section, .practice-view-voice .voice-coach-section, .practice-view-roleplay .roleplay-section { padding-top: 70px; }
+.focused-practice-nav { display: flex; align-items: center; gap: 10px; padding-top: 24px; color: var(--muted); font-size: 13px; }
+.focused-practice-nav a { color: var(--teal); font-weight: 750; text-decoration: none; }
+.focused-practice-nav a:hover, .focused-practice-nav a:focus-visible { text-decoration: underline; }
+.focused-practice-nav + .practice-experience .personal-pilot,
+.focused-practice-nav + .practice-experience .arena-section,
+.focused-practice-nav + .practice-experience .voice-coach-section,
+.focused-practice-nav + .practice-experience .practice-section,
+.focused-practice-nav + .practice-experience .roleplay-section { padding-top: 30px; }
+.focused-practice-loading { min-height: 45vh; display: grid; place-content: center; justify-items: center; gap: 14px; color: var(--muted); }
+.focused-practice-loading-mark { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--teal-bright); border-radius: 50%; animation: focused-practice-spin .8s linear infinite; }
+@keyframes focused-practice-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .focused-practice-loading-mark { animation: none; border-top-color: var(--border); background: var(--mint); } }
 
 @media (max-width: 760px) {
   .public-header, .public-hero { width: min(100% - 28px, 1180px); }
@@ -857,6 +869,12 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
   .today-library-grid a { min-height: 120px; padding: 16px; }
   .practice-view-personal .personal-pilot, .practice-view-daily .practice-section { padding-top: 42px; }
   .practice-view-arena .arena-section, .practice-view-voice .voice-coach-section, .practice-view-roleplay .roleplay-section { padding-top: 42px; }
+  .focused-practice-nav { padding-top: 18px; }
+  .focused-practice-nav + .practice-experience .personal-pilot,
+  .focused-practice-nav + .practice-experience .arena-section,
+  .focused-practice-nav + .practice-experience .voice-coach-section,
+  .focused-practice-nav + .practice-experience .practice-section,
+  .focused-practice-nav + .practice-experience .roleplay-section { padding-top: 22px; }
   .practice-view-progress .progress-section { padding-top: 46px; padding-bottom: 40px; }
   .app-footer { display: none; }
 }
