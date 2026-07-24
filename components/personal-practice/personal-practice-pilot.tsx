@@ -34,6 +34,7 @@ type Step = "intro" | "bridge-reflection" | "repair" | "media" | "practice" | "c
 type Props = {
   isDaySeven?: boolean;
   onDaySevenComplete?: (before: number, after: number) => void;
+  onPracticeFinished?: () => void;
 };
 
 const stageLabels: Record<RehearsalStage, string> = {
@@ -52,7 +53,7 @@ const blankRepair: RepairDraft = {
   saveChoice: "device",
 };
 
-export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }: Props) {
+export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, onPracticeFinished }: Props) {
   const { user, setSyncState } = useAuth();
   const [state, setState] = useState<PersonalPracticeState>(() => emptyPersonalPracticeState(TARGET_SKILL_ID));
   const [ready, setReady] = useState(false);
@@ -413,7 +414,7 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
           </div>}
           <div className="pilot-actions">
             <button type="button" className="primary-button" onClick={repeat}>Өөр жижиг хувилбараар давтах</button>
-            <button type="button" className="text-button" onClick={() => setStep("intro")}>Дуусгах</button>
+            <button type="button" className="text-button" onClick={() => { onPracticeFinished?.(); setStep("intro"); }}>Дуусгах</button>
           </div>
         </article>
       )}

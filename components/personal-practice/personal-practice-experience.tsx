@@ -3,6 +3,7 @@
 import { PersonalPracticePilot } from "@/components/personal-practice/personal-practice-pilot";
 import { useLearningPlan } from "@/lib/plan/cloud-plan";
 import { isPastEventPilotEnabled } from "@/lib/personal-practice/today-router";
+import { clearActivePractice } from "@/lib/practice/active-practice";
 
 export function PersonalPracticeExperience() {
   const { plan, completeToday } = useLearningPlan();
@@ -24,6 +25,7 @@ export function PersonalPracticeExperience() {
       <PersonalPracticePilot
         isDaySeven={plan?.currentDay === 7}
         onDaySevenComplete={(before, after) => completeToday(before, after)}
+        onPracticeFinished={clearActivePractice}
       />
     </div>
   );

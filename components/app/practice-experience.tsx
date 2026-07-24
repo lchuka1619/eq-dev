@@ -9,6 +9,11 @@ import { useCloudProgress } from "@/lib/progress/cloud-progress";
 import { useLearningPlan } from "@/lib/plan/cloud-plan";
 import { isPastEventPilotEnabled } from "@/lib/personal-practice/today-router";
 import { todayKey } from "@/lib/plan/learning-plan";
+import {
+  readActivePractice,
+  writeActivePractice,
+  type ActivePractice,
+} from "@/lib/practice/active-practice";
 
 type VoicePhase = "ready" | "respond" | "feedback" | "retry" | "complete";
 type ArenaPhase = "idle" | "checkin" | "brief" | "scene" | "complete";
@@ -360,6 +365,7 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
   const router = useRouter();
   const pastEventPilotEnabled = isPastEventPilotEnabled();
   const [practiceLibraryOpen, setPracticeLibraryOpen] = useState(false);
+  const [activePractice, setActivePractice] = useState<ActivePractice | null>(null);
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [practiceOpen, setPracticeOpen] = useState(false);
   const [practiceStep, setPracticeStep] = useState(0);
@@ -489,6 +495,7 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
         if (!storedBetaId) window.localStorage.setItem("hariltsaa-beta-id-v1", betaId);
         const storedEvents = window.localStorage.getItem("hariltsaa-beta-events-v1");
         if (storedEvents) setBetaEvents(JSON.parse(storedEvents));
+        setActivePractice(readActivePractice());
       } catch {
         // The experience still works if browser storage is unavailable.
       }
@@ -1164,13 +1171,38 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
         <div className="hero-main">
           <p className="eyebrow">ӨНӨӨДРИЙН ЗОРИЛГО</p>
 
-          {pastEventPilotEnabled ? (
+          {activePractice ? (
+            <article className="featured-practice today-router-card resume-practice-card">
+              <div>
+                <p className="card-kicker">ДУУСААГҮЙ ДАСГАЛ · ТАНЫ ТӨЛӨВ ХАДГАЛАГДСАН</p>
+                <h2>{activePractice.label}</h2>
+                <p className="today-reason">Шинэ дасгал эхлүүлэхээс өмнө өмнөх аюулгүй алхмаасаа үргэлжлүүлээрэй.</p>
+                <div className="today-meta"><span>Local-first</span><span>Pause, skip, safe finish нээлттэй</span></div>
+              </div>
+              <div className="today-actions">
+                <button className="primary-button light" type="button" onClick={() => router.push(activePractice.href)}>Үргэлжлүүлэх <IconArrow /></button>
+              </div>
+            </article>
+          ) : pastEventPilotEnabled ? (
             <TodayPracticeRouter
               dailyMinutes={preferences?.dailyMinutes ?? 3}
               completedDays={plan?.completions.length ?? 0}
               streak={streak}
               onDailyPractice={startTodayPractice}
-              onStartRoute={(route) => router.push(route === "daily_skill_loop" ? "/practice/daily" : `/practice/personal?route=${route}`)}
+              onStartRoute={(route) => {
+                if (route === "daily_skill_loop") {
+                  router.push("/practice/daily");
+                  return;
+                }
+                const active = {
+                  href: `/practice/personal?route=${route}` as ActivePractice["href"],
+                  label: route === "past_repair" ? "Past Event Repair" : "Future Rehearsal",
+                  startedAt: new Date().toISOString(),
+                };
+                writeActivePractice(active);
+                setActivePractice(active);
+                router.push(active.href);
+              }}
             />
           ) : <article className="featured-practice">
             <div>

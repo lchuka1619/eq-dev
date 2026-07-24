@@ -3,6 +3,11 @@ import test from "node:test";
 import { completeLearningPlanDay, todayKey } from "../lib/plan/learning-plan.ts";
 import { buildAuthCallbackUrl, safeAuthDestination } from "../lib/auth/destination.ts";
 import {
+  clearActivePractice,
+  readActivePractice,
+  writeActivePractice,
+} from "../lib/practice/active-practice.ts";
+import {
   TARGET_SKILL_ID,
   createVariation,
   decideProgression,
@@ -17,6 +22,32 @@ test("auth destination allows only canonical app routes", () => {
   assert.equal(safeAuthDestination("/auth/callback"), "/today");
   assert.equal(new URL(buildAuthCallbackUrl("https://eq-dev-xi.vercel.app", "/")).searchParams.get("next"), "/today");
   assert.equal(new URL(buildAuthCallbackUrl("https://eq-dev-xi.vercel.app", "/progress")).searchParams.get("next"), "/progress");
+});
+
+test("active practice resume marker accepts only canonical Personal Practice routes", () => {
+  const values = new Map();
+  const originalStorage = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+  try {
+    const active = {
+      href: "/practice/personal?route=past_repair",
+      label: "Past Event Repair",
+      startedAt: "2026-07-24T10:00:00.000Z",
+    };
+    writeActivePractice(active);
+    assert.deepEqual(readActivePractice(), active);
+    values.set("eq-active-practice-v1", JSON.stringify({ ...active, href: "https://evil.example" }));
+    assert.equal(readActivePractice(), null);
+    clearActivePractice();
+    assert.equal(readActivePractice(), null);
+  } finally {
+    if (originalStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = originalStorage;
+  }
 });
 import { mergeHydratedPersonalPractice } from "../lib/personal-practice/hydration.ts";
 import { isPastEventPilotEnabled, recommendTodayRoute } from "../lib/personal-practice/today-router.ts";

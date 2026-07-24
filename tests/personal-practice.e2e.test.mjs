@@ -131,6 +131,11 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     await page.getByRole("button", { name: "Past Event Repair эхлэх" }).click();
     await page.waitForURL(`${baseUrl}/practice/personal?route=past_repair`);
     await page.getByRole("heading", { name: "Өмнөх эвентийн нэг жижиг мөчийг сонгоё" }).waitFor();
+    await page.locator(".mobile-app-nav").getByRole("link", { name: "Өнөөдөр", exact: true }).click();
+    await page.waitForURL(`${baseUrl}/today`);
+    await page.getByRole("heading", { name: "Past Event Repair" }).waitFor();
+    await page.getByRole("button", { name: /Үргэлжлүүлэх/ }).click();
+    await page.waitForURL(`${baseUrl}/practice/personal?route=past_repair`);
     await page.getByRole("button", { name: "Алгасаад үргэлжлүүлэх" }).click();
     await page.getByRole("img", { name: /Тайван хурлын өрөөнд/ }).waitFor();
     await page.getByRole("button", { name: "Орчны дууг сонсох" }).waitFor();
@@ -203,6 +208,7 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
         })),
       }));
       localStorage.removeItem("eq-connected-rehearsal-v1");
+      localStorage.removeItem("eq-active-practice-v1");
     });
     await page.goto(`${baseUrl}/practice/personal`, { waitUntil: "networkidle" });
 
