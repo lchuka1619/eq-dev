@@ -76,6 +76,7 @@ export function mergeHydratedPersonalPractice(
     repair: cloudRepair,
     attempts: mergedAttempts,
     bridgeAccepted: journey.state?.bridge_accepted ?? local.bridgeAccepted,
+    bridge: local.bridge,
     surpriseOptIn: journey.state?.surprise_opt_in ?? local.surpriseOptIn ?? false,
   };
 }

@@ -139,6 +139,49 @@ test("personal practice RLS isolates two authenticated users", {
       });
     assert.ifError(mediaAttemptError);
 
+    const { error: bridgeInsertError } = await clients[0]
+      .from("real_life_bridges")
+      .insert({
+        id: crypto.randomUUID(),
+        journey_id: journeyA,
+        user_id: users[0].id,
+        status: "accepted",
+        offered_at: new Date().toISOString(),
+        responded_at: new Date().toISOString(),
+      });
+    assert.ifError(bridgeInsertError);
+    const { data: bReadsBridge, error: bReadsBridgeError } = await clients[1]
+      .from("real_life_bridges")
+      .select("id")
+      .eq("journey_id", journeyA);
+    assert.ifError(bReadsBridgeError);
+    assert.deepEqual(bReadsBridge, []);
+
+    const connectedId = crypto.randomUUID();
+    const { error: connectedInsertError } = await clients[0]
+      .from("connected_rehearsals")
+      .insert({
+        id: connectedId,
+        journey_id: journeyA,
+        user_id: users[0].id,
+        status: "paused",
+        current_moment: 2,
+        completed_moment_ids: ["arrive", "listen"],
+        intensity_before: 5,
+        intensity_after: 4,
+        used_recovery: false,
+        pause_count: 1,
+        elapsed_seconds: 60,
+        started_at: new Date().toISOString(),
+      });
+    assert.ifError(connectedInsertError);
+    const { data: bReadsConnected, error: bReadsConnectedError } = await clients[1]
+      .from("connected_rehearsals")
+      .select("id")
+      .eq("id", connectedId);
+    assert.ifError(bReadsConnectedError);
+    assert.deepEqual(bReadsConnected, []);
+
     const { error: routeInsertError } = await clients[0]
       .from("today_practice_routes")
       .insert({

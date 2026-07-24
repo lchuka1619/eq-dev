@@ -1,15 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { completeLearningPlanDay, todayKey } from "../lib/plan/learning-plan.ts";
+import { buildAuthCallbackUrl, safeAuthDestination } from "../lib/auth/destination.ts";
 import {
   TARGET_SKILL_ID,
   createVariation,
   decideProgression,
   safeStageForIntensity,
 } from "../lib/personal-practice/variation-engine.ts";
+
+test("auth destination allows only canonical app routes", () => {
+  assert.equal(safeAuthDestination("/progress"), "/progress");
+  assert.equal(safeAuthDestination("/today"), "/today");
+  assert.equal(safeAuthDestination("https://evil.example"), "/today");
+  assert.equal(safeAuthDestination("//evil.example"), "/today");
+  assert.equal(safeAuthDestination("/auth/callback"), "/today");
+  assert.equal(new URL(buildAuthCallbackUrl("https://eq-dev-xi.vercel.app", "/")).searchParams.get("next"), "/today");
+  assert.equal(new URL(buildAuthCallbackUrl("https://eq-dev-xi.vercel.app", "/progress")).searchParams.get("next"), "/progress");
+});
 import { mergeHydratedPersonalPractice } from "../lib/personal-practice/hydration.ts";
 import { isPastEventPilotEnabled, recommendTodayRoute } from "../lib/personal-practice/today-router.ts";
 import { ideationEventMedia, mediaAssetForIntensity } from "../lib/personal-practice/media-assets.ts";
+import {
+  CONNECTED_REHEARSAL_CAP_SECONDS,
+  connectedMoments,
+  connectedTimeRemaining,
+} from "../lib/personal-practice/connected-rehearsal.ts";
 
 test("controlled variation is deterministic and changes at most two dimensions", () => {
   const first = createVariation("pilot-user-42", "prompted", 2);
@@ -35,6 +51,14 @@ test("graded media metadata is explicit and high intensity falls back to text", 
   assert.ok(ideationEventMedia.image.alt.length > 20);
   assert.equal(mediaAssetForIntensity(8)?.id, "ideation-event-calm-v1");
   assert.equal(mediaAssetForIntensity(9), null);
+});
+
+test("connected rehearsal has seven moments and a ten-minute cap", () => {
+  assert.equal(connectedMoments.length, 7);
+  assert.ok(connectedMoments.some((item) => item.recovery));
+  assert.equal(CONNECTED_REHEARSAL_CAP_SECONDS, 600);
+  assert.equal(connectedTimeRemaining(599), 1);
+  assert.equal(connectedTimeRemaining(601), 0);
 });
 
 test("guided pilot exposes at least three deterministic variants", () => {
@@ -204,6 +228,16 @@ test("cloud hydration restores stage, reflection, repair and bridge without resp
     repair: null,
     attempts: [],
     bridgeAccepted: null,
+    bridge: {
+      id: "bridge-local",
+      status: "none",
+      offeredAt: null,
+      respondedAt: null,
+      didIt: null,
+      intensityBefore: null,
+      intensityAfter: null,
+      reflection: "",
+    },
     surpriseOptIn: false,
   };
   const hydrated = mergeHydratedPersonalPractice(local, {

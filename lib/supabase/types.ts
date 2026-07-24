@@ -71,3 +71,32 @@ export type PersonalPracticeAttemptMedia = {
   media_asset_id: string | null;
   media_skipped: boolean;
 };
+
+export type RealLifeBridgeRow = {
+  id: string;
+  journey_id: string;
+  user_id: string;
+  status: "accepted" | "skipped" | "reflected";
+  offered_at: string;
+  responded_at: string | null;
+  did_it: boolean | null;
+  intensity_before: number | null;
+  intensity_after: number | null;
+  reflection: string | null;
+};
+
+export type ConnectedRehearsalRow = {
+  id: string;
+  journey_id: string;
+  user_id: string;
+  status: "active" | "paused" | "completed" | "safe-finish";
+  current_moment: number;
+  completed_moment_ids: string[];
+  intensity_before: number;
+  intensity_after: number | null;
+  used_recovery: boolean;
+  pause_count: number;
+  elapsed_seconds: number;
+  started_at: string;
+  completed_at: string | null;
+};

@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
+import { safeAuthDestination } from "@/lib/auth/destination";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-
-function safeNext(value: string | null) {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
-}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = safeNext(url.searchParams.get("next"));
+  const next = safeAuthDestination(url.searchParams.get("next"));
   const client = await getSupabaseServerClient();
 
   if (code && client) {
@@ -17,6 +14,6 @@ export async function GET(request: Request) {
   }
 
   const errorUrl = new URL(next, url.origin);
-  errorUrl.searchParams.set("auth_error", "callback");
+  errorUrl.searchParams.set("auth_error", code ? "exchange_failed" : "missing_code");
   return NextResponse.redirect(errorUrl);
 }
