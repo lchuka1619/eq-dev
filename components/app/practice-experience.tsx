@@ -4,11 +4,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
+import { useAuth } from "@/components/auth/auth-provider";
 import { TodayPracticeRouter } from "@/components/personal-practice/today-practice-router";
 import { useCloudProgress } from "@/lib/progress/cloud-progress";
 import { useLearningPlan } from "@/lib/plan/cloud-plan";
 import { isPastEventPilotEnabled } from "@/lib/personal-practice/today-router";
 import { todayKey } from "@/lib/plan/learning-plan";
+import {
+  readActivePractice,
+  writeActivePractice,
+  type ActivePractice,
+} from "@/lib/practice/active-practice";
+import {
+  readPersonalPracticeState,
+  writePersonalPracticeState,
+} from "@/lib/personal-practice/persistence";
+import { hydratePersonalPractice } from "@/lib/personal-practice/cloud-practice";
+import { TARGET_SKILL_ID } from "@/lib/personal-practice/variation-engine";
+import {
+  buildMasterySummary,
+  type MasterySummary,
+} from "@/lib/context-to-mastery/mastery-summary";
 
 type VoicePhase = "ready" | "respond" | "feedback" | "retry" | "complete";
 type ArenaPhase = "idle" | "checkin" | "brief" | "scene" | "complete";
@@ -346,6 +362,16 @@ function calculateStreak(dates: string[]) {
   return streak;
 }
 
+function stageLabel(stage: MasterySummary["supportLevel"]) {
+  return {
+    guided: "Guided",
+    prompted: "Prompted",
+    independent: "Independent",
+    "light-surprise": "Light Surprise",
+    "connected-rehearsal": "Connected Rehearsal",
+  }[stage];
+}
+
 function IconArrow() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -358,7 +384,10 @@ export type PracticeExperienceView = "today" | "journey" | "progress" | "arena" 
 
 export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
   const router = useRouter();
+  const { user, setSyncState } = useAuth();
   const pastEventPilotEnabled = isPastEventPilotEnabled();
+  const [practiceLibraryOpen, setPracticeLibraryOpen] = useState(false);
+  const [activePractice, setActivePractice] = useState<ActivePractice | null>(null);
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [practiceOpen, setPracticeOpen] = useState(false);
   const [practiceStep, setPracticeStep] = useState(0);
@@ -417,6 +446,7 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
   const [betaIssue, setBetaIssue] = useState("none");
   const [betaComment, setBetaComment] = useState("");
   const [betaFeedbackSent, setBetaFeedbackSent] = useState(false);
+  const [personalMastery, setPersonalMastery] = useState<MasterySummary | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -488,6 +518,8 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
         if (!storedBetaId) window.localStorage.setItem("hariltsaa-beta-id-v1", betaId);
         const storedEvents = window.localStorage.getItem("hariltsaa-beta-events-v1");
         if (storedEvents) setBetaEvents(JSON.parse(storedEvents));
+        setActivePractice(readActivePractice());
+        setPersonalMastery(buildMasterySummary(readPersonalPracticeState(TARGET_SKILL_ID)));
       } catch {
         // The experience still works if browser storage is unavailable.
       }
@@ -495,6 +527,19 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (view !== "progress" || !localProgressHydrated || !user) return;
+    const local = readPersonalPracticeState(TARGET_SKILL_ID);
+    setSyncState("syncing");
+    void hydratePersonalPractice(user.id, local)
+      .then((hydrated) => {
+        writePersonalPracticeState(hydrated);
+        setPersonalMastery(buildMasterySummary(hydrated));
+        setSyncState("synced");
+      })
+      .catch(() => setSyncState("pending"));
+  }, [localProgressHydrated, setSyncState, user, view]);
 
   useEffect(() => {
     if (!timerRunning || seconds <= 0) return;
@@ -1163,13 +1208,38 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
         <div className="hero-main">
           <p className="eyebrow">ӨНӨӨДРИЙН ЗОРИЛГО</p>
 
-          {pastEventPilotEnabled ? (
+          {activePractice ? (
+            <article className="featured-practice today-router-card resume-practice-card">
+              <div>
+                <p className="card-kicker">ДУУСААГҮЙ ДАСГАЛ · ТАНЫ ТӨЛӨВ ХАДГАЛАГДСАН</p>
+                <h2>{activePractice.label}</h2>
+                <p className="today-reason">Шинэ дасгал эхлүүлэхээс өмнө өмнөх аюулгүй алхмаасаа үргэлжлүүлээрэй.</p>
+                <div className="today-meta"><span>Local-first</span><span>Pause, skip, safe finish нээлттэй</span></div>
+              </div>
+              <div className="today-actions">
+                <button className="primary-button light" type="button" onClick={() => router.push(activePractice.href)}>Үргэлжлүүлэх <IconArrow /></button>
+              </div>
+            </article>
+          ) : pastEventPilotEnabled ? (
             <TodayPracticeRouter
               dailyMinutes={preferences?.dailyMinutes ?? 3}
               completedDays={plan?.completions.length ?? 0}
               streak={streak}
               onDailyPractice={startTodayPractice}
-              onStartRoute={(route) => router.push(route === "daily_skill_loop" ? "/practice/daily" : `/practice/personal?route=${route}`)}
+              onStartRoute={(route) => {
+                const active = {
+                  href: `/practice/personal?route=${route}` as ActivePractice["href"],
+                  label: route === "past_repair"
+                    ? "Past Event Repair"
+                    : route === "future_rehearsal"
+                      ? "Future Rehearsal"
+                      : "Daily Skill Loop",
+                  startedAt: new Date().toISOString(),
+                };
+                writeActivePractice(active);
+                setActivePractice(active);
+                router.push(active.href);
+              }}
             />
           ) : <article className="featured-practice">
             <div>
@@ -1194,17 +1264,28 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
 
       </section>
       <section className="today-library section-shell" aria-labelledby="today-library-title">
-        <div>
-          <p className="eyebrow">ӨӨР ДАСГАЛ СОНГОХ</p>
-          <h2 id="today-library-title">Өнөөдөрт тохирох богино замууд</h2>
-        </div>
-        <div className="today-library-grid">
-          <Link href="/practice/personal"><b>Personal Practice</b><span>Past repair ба varied rehearsal</span></Link>
-          <Link href="/practice/arena"><b>Ярианы талбар</b><span>Багийн өдрийн хоол</span></Link>
-          <Link href="/practice/voice"><b>AI дадлага</b><span>Сонсох, хариулах, retry</span></Link>
-          <Link href="/practice/daily"><b>Өдөр тутмын чадвар</b><span>3–10 минутын давталт</span></Link>
-          <Link href="/practice/roleplay"><b>Дүрд тоглох</b><span>Ажил, гэр бүл, хил хязгаар</span></Link>
-        </div>
+        <button
+          className="today-library-toggle"
+          type="button"
+          aria-expanded={practiceLibraryOpen}
+          aria-controls="today-library-options"
+          onClick={() => setPracticeLibraryOpen((current) => !current)}
+        >
+          <span><small>SECONDARY</small><b id="today-library-title">Өөр дасгал</b></span>
+          <span aria-hidden="true">{practiceLibraryOpen ? "−" : "+"}</span>
+        </button>
+        {practiceLibraryOpen && (
+          <div id="today-library-options" className="today-library-panel">
+            <p>Өнөөдрийн санал тохирохгүй бол өөр богино дасгал сонгож болно.</p>
+            <div className="today-library-grid">
+              <Link href="/practice/personal"><b>Personal Practice</b><span>Past repair ба varied rehearsal</span></Link>
+              <Link href="/practice/arena"><b>Ярианы талбар</b><span>Багийн өдрийн хоол</span></Link>
+              <Link href="/practice/voice"><b>AI дадлага</b><span>Сонсох, хариулах, retry</span></Link>
+              <Link href="/practice/daily"><b>Өдөр тутмын чадвар</b><span>3–10 минутын давталт</span></Link>
+              <Link href="/practice/roleplay"><b>Дүрд тоглох</b><span>Ажил, гэр бүл, хил хязгаар</span></Link>
+            </div>
+          </div>
+        )}
       </section>
       </>
       )}
@@ -1807,6 +1888,38 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
             Нэг өдөрт нэг жижиг харилцааг илүү сайн хийхэд л төвлөр. Таны ахиц зөвхөн энэ төхөөрөмж дээр хадгалагдана.
           </p>
         </div>
+        {personalMastery && (
+          <article className="mastery-progress-card" aria-labelledby="mastery-progress-title">
+            <div className="mastery-progress-head">
+              <div>
+                <span>PERSONAL PRACTICE MASTERY</span>
+                <h3 id="mastery-progress-title">{personalMastery.targetSkillLabel}</h3>
+              </div>
+              <strong>{stageLabel(personalMastery.supportLevel)}</strong>
+            </div>
+            <div className="mastery-evidence">
+              <p><b>{personalMastery.distinctVariantCount}</b><span>өөр нөхцөлд утгатай давтсан</span></p>
+              <p>
+                <b>{personalMastery.confirmedAcrossDays ? "✓" : "—"}</b>
+                <span>{personalMastery.confirmedAcrossDays ? "өөр өдөр баталгаажсан" : "дараагийн өдрийн баталгаа хүлээгдэж байна"}</span>
+              </p>
+            </div>
+            <ul className="mastery-criteria">
+              {personalMastery.criteria.map((criterion) => (
+                <li key={criterion.id} className={criterion.stable ? "stable" : ""}>
+                  <i aria-hidden="true">{criterion.stable ? "✓" : criterion.variantCount}</i>
+                  <span><b>{criterion.label}</b><small>{criterion.stable ? "2 өөр нөхцөлд тогтвортой" : `${criterion.variantCount}/2 нөхцөлд нотолгоотой`}</small></span>
+                </li>
+              ))}
+            </ul>
+            <div className="mastery-next">
+              <span>ДАРААГИЙН АЛХАМ</span>
+              <p>{personalMastery.nextRecommendation}</p>
+              <Link href="/practice/personal">Personal Practice үргэлжлүүлэх</Link>
+            </div>
+            <small className="mastery-disclaimer">XP болон session-ийн тоо нь mastery-г дангаараа тодорхойлохгүй.</small>
+          </article>
+        )}
         <div className="progress-stats">
           <div><strong>{progress.sessions + arenaProgress.sessions}</strong><span>нийт session</span></div>
           <div><strong>{streak}</strong><span>өдрийн дараалал</span></div>

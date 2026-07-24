@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  LEARNING_EVENT_NAMES,
+  sanitizeLearningProperties,
+} from "@/lib/analytics/learning-events";
 
 const allowedEvents = new Set([
   "arena_started",
@@ -10,6 +14,7 @@ const allowedEvents = new Set([
   "control_used",
   "arena_completed",
   "beta_feedback_submitted",
+  ...LEARNING_EVENT_NAMES,
 ]);
 
 type BetaEventRequest = {
@@ -44,11 +49,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "invalid_anonymous_id" }, { status: 400 });
     }
 
+    const learningEvent = (LEARNING_EVENT_NAMES as readonly string[]).includes(body.event);
     const record = {
       event: body.event,
       anonymousId: body.anonymousId,
-      sessionId: typeof body.sessionId === "string" ? body.sessionId.slice(0, 80) : "",
-      properties: sanitizeProperties(body.properties),
+      sessionId: learningEvent
+        ? (typeof body.sessionId === "string" && /^[a-zA-Z0-9-]{8,80}$/.test(body.sessionId) ? body.sessionId : "")
+        : (typeof body.sessionId === "string" ? body.sessionId.slice(0, 80) : ""),
+      properties: learningEvent
+        ? sanitizeLearningProperties(body.properties)
+        : sanitizeProperties(body.properties),
       receivedAt: new Date().toISOString(),
     };
 

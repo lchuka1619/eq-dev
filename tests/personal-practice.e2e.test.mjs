@@ -55,6 +55,8 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
             usedHint: false,
             anxietyBefore: 5,
             anxietyAfter: 4,
+            validAttempt: true,
+            demonstratedCriteria: 2,
             variation: { id: "prior-variant-a" },
             response: "",
             reflection: "",
@@ -69,6 +71,8 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
             usedHint: false,
             anxietyBefore: 5,
             anxietyAfter: 4,
+            validAttempt: true,
+            demonstratedCriteria: 2,
             variation: { id: "prior-variant-b" },
             response: "",
             reflection: "",
@@ -99,13 +103,22 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     assert.equal(await page.locator("#voice-coach").count(), 0);
     assert.equal(await page.locator("#practice").count(), 0);
     assert.equal(await page.locator("#roleplay").count(), 0);
-    for (const path of [
+    const alternativePaths = [
       "/practice/personal",
       "/practice/arena",
       "/practice/voice",
       "/practice/daily",
       "/practice/roleplay",
-    ]) {
+    ];
+    for (const path of alternativePaths) {
+      assert.equal(await page.locator(`a[href="${path}"]`).count(), 0);
+    }
+    const libraryToggle = page.getByRole("button", { name: /Өөр дасгал/ });
+    assert.equal(await libraryToggle.getAttribute("aria-expanded"), "false");
+    await libraryToggle.focus();
+    await page.keyboard.press("Enter");
+    assert.equal(await libraryToggle.getAttribute("aria-expanded"), "true");
+    for (const path of alternativePaths) {
       assert.equal(await page.locator(`a[href="${path}"]`).count(), 1);
     }
     await page.getByRole("link", { name: /Дүрд тоглох/ }).click();
@@ -119,28 +132,70 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     assert.equal(await page.getByRole("dialog").count(), 0);
     await page.getByRole("link", { name: "← Өнөөдөр" }).click();
     await page.waitForURL(`${baseUrl}/today`);
+    await page.goto(`${baseUrl}/practice/personal?route=future_rehearsal`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Ойрын нөхцөлөө хоёр минутад бэлдэе" }).waitFor();
+    await page.getByLabel(/Хамгийн хэцүү санагдаж буй мөч/).fill("Хоёр хүн зэрэг ярьсны дараа санаагаа оруулах");
+    await page.getByLabel(/Бэлэн байлгах эхний өгүүлбэр/).fill("Таны хэлсэнтэй холбоод нэг санаа нэмье.");
+    await page.getByRole("button", { name: "Хадгалахгүй үргэлжлүүлэх" }).click();
+    await page.getByRole("img", { name: /Тайван хурлын өрөөнд/ }).waitFor();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("eq-personal-practice-pilot-v1")).context), null);
+    await page.getByRole("button", { name: "Энэ нөхцөлөөр үргэлжлүүлэх" }).click();
+    await page.locator(".scene-line").getByText(/Хоёр хүн зэрэг ярьсны дараа санаагаа оруулах/).waitFor();
+    assert.match(
+      await page.getByLabel("Таны хэлэх хариулт").getAttribute("placeholder"),
+      /Таны хэлсэнтэй холбоод нэг санаа нэмье/,
+    );
+    await page.goto(`${baseUrl}/practice/personal?route=daily_skill_loop`, { waitUntil: "networkidle" });
+    await page.getByRole("img", { name: /Тайван хурлын өрөөнд/ }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: /Ойрын нөхцөлөө хоёр минутад бэлдье/ }).count(), 0);
+    await page.getByRole("button", { name: "Энэ нөхцөлөөр үргэлжлүүлэх" }).click();
+    await page.getByText("ӨДӨР ТУТМЫН НӨХЦӨЛ", { exact: true }).waitFor();
+    await page.getByText("Guided rehearsal").waitFor();
+    await page.goto(`${baseUrl}/today`, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Past Event Repair эхлэх" }).click();
     await page.waitForURL(`${baseUrl}/practice/personal?route=past_repair`);
     await page.getByRole("heading", { name: "Өмнөх эвентийн нэг жижиг мөчийг сонгоё" }).waitFor();
+    await page.locator(".mobile-app-nav").getByRole("link", { name: "Өнөөдөр", exact: true }).click();
+    await page.waitForURL(`${baseUrl}/today`);
+    await page.getByRole("heading", { name: "Past Event Repair" }).waitFor();
+    await page.getByRole("button", { name: /Үргэлжлүүлэх/ }).click();
+    await page.waitForURL(`${baseUrl}/practice/personal?route=past_repair`);
     await page.getByRole("button", { name: "Алгасаад үргэлжлүүлэх" }).click();
     await page.getByRole("img", { name: /Тайван хурлын өрөөнд/ }).waitFor();
     await page.getByRole("button", { name: "Орчны дууг сонсох" }).waitFor();
     await page.getByRole("button", { name: "Энэ нөхцөлөөр үргэлжлүүлэх" }).click();
 
+    const guidedScene = await page.locator(".scene-line").innerText();
     await page.getByLabel("Таны хэлэх хариулт").fill(
-      "Таны хэлсэнтэй холбоод нэг санаа нэмье. Эхлээд жижиг туршилт хийж болох уу?",
+      "Таны хэлсэнтэй холбоод нэг санаа нэмье. Эхлээд жижиг туршилт хийе.",
     );
     await page.getByRole("button", { name: "Давталтыг дуусгах" }).click();
     await page.getByText("Сайн болсон").waitFor();
-    await page.getByText("Нэг сайжруулалт").waitFor();
+    await page.getByText("→ Нэг сайжруулалт", { exact: true }).waitFor();
+    await page.getByText(/Жишээ хувилбар/).waitFor();
 
     await assert.doesNotReject(() =>
       page.getByText("Дараагийн шат: Prompted.").waitFor({ state: "visible" }),
     );
+    await page.getByRole("button", { name: "Энэ нэг сайжруулалтыг дахин турших" }).click();
+    await page.getByText("Focused retry", { exact: true }).waitFor();
+    assert.equal(await page.locator(".scene-line").innerText(), guidedScene);
+    await page.getByLabel("Таны хэлэх хариулт").fill(
+      "Таны хэлсэнтэй холбоод нэг санаа нэмье. Эхлээд жижиг туршилт хийе. Та юу гэж бодож байна?",
+    );
+    await page.getByRole("button", { name: "Focused retry-г дуусгах" }).click();
+    await page.getByText("Focused retry дээр сонгосон шалгуур сайжирлаа.").waitFor();
     await page.getByRole("button", { name: "Өөр жижиг хувилбараар давтах" }).click();
     await assert.doesNotReject(() =>
       page.getByText("Prompted rehearsal").waitFor({ state: "visible" }),
     );
+    await page.getByRole("button", { name: "Ⅱ Pause" }).click();
+    await page.getByText(/Түр зогслоо/).waitFor();
+    assert.equal(await page.getByLabel("Таны хэлэх хариулт").isDisabled(), true);
+    await page.getByRole("button", { name: "▶ Үргэлжлүүлэх" }).click();
+    assert.equal(await page.getByLabel("Таны хэлэх хариулт").isDisabled(), false);
+    await page.getByRole("button", { name: "↓ Нэг шат зөөлрүүлэх" }).click();
+    await page.getByText("Guided rehearsal").waitFor();
 
     const layout = await page.evaluate(() => {
       window.scrollTo(1000, window.scrollY);
@@ -194,6 +249,7 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
         })),
       }));
       localStorage.removeItem("eq-connected-rehearsal-v1");
+      localStorage.removeItem("eq-active-practice-v1");
     });
     await page.goto(`${baseUrl}/practice/personal`, { waitUntil: "networkidle" });
 
@@ -244,6 +300,11 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
       await navLink.click();
       await page.waitForURL(`${baseUrl}${destination.path}`);
       await page.getByRole("heading", { name: destination.heading }).waitFor();
+      if (destination.path === "/progress") {
+        await page.getByRole("heading", { name: "Ярианд тайван нэгдэж, нэг тодорхой санаа нэмэх" }).waitFor();
+        await page.getByText("өөр өдөр баталгаажсан").waitFor();
+        await page.getByText("XP болон session-ийн тоо нь mastery-г дангаараа тодорхойлохгүй.").waitFor();
+      }
       assert.equal(await navLink.getAttribute("aria-current"), "page");
     }
 

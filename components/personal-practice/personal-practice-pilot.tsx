@@ -21,19 +21,35 @@ import {
 } from "@/lib/personal-practice/persistence";
 import {
   TARGET_SKILL_ID,
+  canUseLightSurprise,
   createVariation,
   decideProgression,
-  evaluatePracticeResponse,
   safeStageForIntensity,
   type RehearsalStage,
   type SceneRenderer,
 } from "@/lib/personal-practice/variation-engine";
+import {
+  contextForStorage,
+  dailySkillContext,
+  normalizePracticeContext,
+  type ContextSaveChoice,
+  type PracticeContext,
+} from "@/lib/context-to-mastery/practice-context";
+import { contextualizeVariation } from "@/lib/context-to-mastery/context-scene";
+import {
+  criterionImproved,
+  demonstratedCriterionCount,
+  evaluatePracticeResponse,
+  type SkillCriterionId,
+} from "@/lib/context-to-mastery/skill-rubric";
+import { trackLearningEvent } from "@/lib/analytics/learning-events";
 
-type Step = "intro" | "bridge-reflection" | "repair" | "media" | "practice" | "connected" | "result";
+type Step = "intro" | "bridge-reflection" | "repair" | "future-context" | "media" | "practice" | "connected" | "result";
 
 type Props = {
   isDaySeven?: boolean;
   onDaySevenComplete?: (before: number, after: number) => void;
+  onPracticeFinished?: () => void;
 };
 
 const stageLabels: Record<RehearsalStage, string> = {
@@ -52,18 +68,36 @@ const blankRepair: RepairDraft = {
   saveChoice: "device",
 };
 
-export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }: Props) {
+const blankFutureContext: PracticeContext = {
+  entryRoute: "future_rehearsal",
+  eventType: "Байгууллагын эвент",
+  peopleOrRoles: ["хамтрагч", "багийн ахлах"],
+  fearedMoment: "",
+  intendedOpening: "",
+  desiredAction: "Өмнөх яриатай холбож нэг тодорхой санаа нэмэх",
+  intensity: 4,
+  saveChoice: "device",
+};
+
+export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, onPracticeFinished }: Props) {
   const { user, setSyncState } = useAuth();
   const [state, setState] = useState<PersonalPracticeState>(() => emptyPersonalPracticeState(TARGET_SKILL_ID));
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState<Step>("intro");
   const [repair, setRepair] = useState<RepairDraft>(blankRepair);
+  const [practiceContext, setPracticeContext] = useState<PracticeContext | null>(null);
+  const [futureContext, setFutureContext] = useState<PracticeContext>(blankFutureContext);
   const [anxietyBefore, setAnxietyBefore] = useState(4);
   const [anxietyAfter, setAnxietyAfter] = useState(4);
   const [response, setResponse] = useState("");
   const [reflection, setReflection] = useState("");
   const [usedHint, setUsedHint] = useState(false);
   const [safeFinished, setSafeFinished] = useState(false);
+  const [practicePaused, setPracticePaused] = useState(false);
+  const [focusedRetry, setFocusedRetry] = useState<{
+    attemptId: string;
+    criterionId: SkillCriterionId;
+  } | null>(null);
   const [mediaMode, setMediaMode] = useState<Extract<SceneRenderer, "text_voice" | "image_audio">>("image_audio");
   const [bridgeDidIt, setBridgeDidIt] = useState<boolean | null>(null);
   const [bridgeBefore, setBridgeBefore] = useState(4);
@@ -73,16 +107,37 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
   const hydratedUser = useRef<string | null>(null);
   const activeStage = safeStageForIntensity(state.stage, anxietyBefore);
   const variation = useMemo(
-    () => createVariation(state.journeyId, activeStage, state.attempts.length, mediaMode),
-    [activeStage, mediaMode, state.attempts.length, state.journeyId],
+    () => {
+      const retryVariation = focusedRetry
+        ? state.attempts.find((item) => item.id === focusedRetry.attemptId)?.variation
+        : null;
+      return retryVariation ?? contextualizeVariation(
+        createVariation(state.journeyId, activeStage, state.attempts.length, mediaMode),
+        practiceContext,
+      );
+    },
+    [activeStage, focusedRetry, mediaMode, practiceContext, state.attempts, state.journeyId],
   );
-  const feedback = useMemo(() => evaluatePracticeResponse(response), [response]);
+  const evaluation = useMemo(() => evaluatePracticeResponse(response), [response]);
+  const latestAttempt = state.attempts.at(-1);
+  const latestEvaluation = latestAttempt?.evaluation;
+  const retryEvaluation = focusedRetry
+    ? state.attempts.find((item) => item.id === focusedRetry.attemptId)?.evaluation
+    : undefined;
+  const lightSurpriseReady = canUseLightSurprise(state.attempts.map((attempt) => ({
+    ...attempt,
+    variationId: attempt.variation.id,
+  })));
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const saved = readPersonalPracticeState(TARGET_SKILL_ID);
       setState(saved);
       if (saved.repair) setRepair(saved.repair);
+      if (saved.context) {
+        setPracticeContext(saved.context);
+        if (saved.context.entryRoute === "future_rehearsal") setFutureContext(saved.context);
+      }
       setReady(true);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -100,6 +155,10 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
       .then((hydrated) => {
         setState(hydrated);
         if (hydrated.repair) setRepair(hydrated.repair);
+        if (hydrated.context) {
+          setPracticeContext(hydrated.context);
+          if (hydrated.context.entryRoute === "future_rehearsal") setFutureContext(hydrated.context);
+        }
         writePersonalPracticeState(hydrated);
         setSyncState("synced");
       })
@@ -109,13 +168,23 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
   useEffect(() => {
     const startFromToday = (event: Event) => {
       const route = (event as CustomEvent<{ route?: string }>).detail?.route;
-      setStep(route === "past_repair" ? "repair" : "media");
+      setStep(route === "past_repair" ? "repair" : "future-context");
     };
     window.addEventListener("eq:start-personal-practice", startFromToday);
     const initialRoute = new URLSearchParams(window.location.search).get("route");
     const frame = window.requestAnimationFrame(() => {
       if (initialRoute === "past_repair") setStep("repair");
-      if (initialRoute === "future_rehearsal") setStep("media");
+      if (initialRoute === "future_rehearsal") setStep("future-context");
+      if (initialRoute === "daily_skill_loop") {
+        const context = dailySkillContext();
+        const current = readPersonalPracticeState(TARGET_SKILL_ID);
+        setPracticeContext(context);
+        const next = { ...current, context };
+        setState(next);
+        writePersonalPracticeState(next);
+        setAnxietyBefore(context.intensity ?? 3);
+        setStep("media");
+      }
     });
     return () => {
       window.cancelAnimationFrame(frame);
@@ -135,9 +204,45 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
 
   const continueFromRepair = (choice: RepairDraft["saveChoice"]) => {
     const nextRepair = { ...repair, saveChoice: choice };
+    const context = normalizePracticeContext({
+      entryRoute: "past_repair",
+      eventType: "Байгууллагын ideation / event",
+      decisiveMoment: repair.selectedMoment,
+      observableFact: repair.fact,
+      conclusion: repair.conclusion,
+      desiredAction: "Өмнөх яриатай холбож нэг тодорхой санаа нэмэх",
+      intensity: anxietyBefore,
+      saveChoice: choice,
+    });
     setRepair(nextRepair);
-    const next = { ...state, repair: choice === "none" ? null : nextRepair };
+    setPracticeContext(context);
+    const next = {
+      ...state,
+      context: contextForStorage(context),
+      repair: choice === "none" ? null : nextRepair,
+    };
     saveState(next);
+    trackLearningEvent(choice === "none" ? "context_capture_skipped" : "context_capture_completed", {
+      entry_route: "past_repair",
+      target_skill_id: state.targetSkillId,
+      save_choice: choice,
+      has_context: Boolean(repair.fact.trim() || repair.conclusion.trim()),
+    });
+    setStep("media");
+  };
+
+  const continueFromFuture = (choice: ContextSaveChoice) => {
+    const context = normalizePracticeContext({ ...futureContext, saveChoice: choice });
+    setFutureContext(context);
+    setPracticeContext(context);
+    saveState({ ...state, context: contextForStorage(context) });
+    trackLearningEvent("context_capture_completed", {
+      entry_route: "future_rehearsal",
+      target_skill_id: state.targetSkillId,
+      save_choice: choice,
+      has_context: Boolean(context.fearedMoment || context.intendedOpening),
+    });
+    setAnxietyBefore(context.intensity ?? 4);
     setStep("media");
   };
 
@@ -154,15 +259,23 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
 
   const finishAttempt = async (safe = false) => {
     const completedAt = new Date().toISOString();
+    const attemptStage = focusedRetry ? variation.stage : activeStage;
+    const retrySource = focusedRetry
+      ? state.attempts.find((item) => item.id === focusedRetry.attemptId)
+      : undefined;
+    const validAttempt = !safe && evaluation.validAttempt;
+    const demonstratedCriteria = validAttempt ? demonstratedCriterionCount(evaluation) : 0;
     const evidence = {
-      stage: activeStage,
-      completed: !safe && Boolean(response.trim()),
+      stage: attemptStage,
+      completed: validAttempt,
       safeFinished: safe,
       usedHint,
       anxietyBefore,
       anxietyAfter,
       completedAt,
       variationId: variation.id,
+      validAttempt,
+      demonstratedCriteria,
     };
     const history = state.attempts.map((item) => ({
       ...item,
@@ -179,6 +292,12 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
       reflection: reflection.trim(),
       decision: decision.decision,
       completedAt,
+      evaluation,
+      retryOfAttemptId: retrySource?.id,
+      focusedCriterionId: focusedRetry?.criterionId,
+      criterionImproved: retrySource?.evaluation && focusedRetry
+        ? criterionImproved(retrySource.evaluation, evaluation, focusedRetry.criterionId)
+        : undefined,
     };
     const next = {
       ...state,
@@ -186,7 +305,58 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
       attempts: [...state.attempts, attempt],
     };
     setSafeFinished(safe);
+    setFocusedRetry(null);
     saveState(next);
+    trackLearningEvent("practice_attempt_submitted", {
+      entry_route: practiceContext?.entryRoute ?? "daily_skill_loop",
+      target_skill_id: state.targetSkillId,
+      support_level: attemptStage,
+      variant_id: variation.id,
+      changed_dimension_count: variation.changedDimensions.length,
+    });
+    trackLearningEvent("practice_attempt_validity", {
+      target_skill_id: state.targetSkillId,
+      support_level: attemptStage,
+      valid_attempt: validAttempt,
+    });
+    trackLearningEvent("rubric_evaluated", {
+      target_skill_id: state.targetSkillId,
+      evaluation_source: evaluation.source,
+      criteria_present: demonstratedCriteria,
+      valid_attempt: validAttempt,
+    });
+    trackLearningEvent("mastery_decision", {
+      target_skill_id: state.targetSkillId,
+      support_level: decision.nextStage,
+      decision: decision.decision,
+      valid_attempt: validAttempt,
+    });
+    if (safe) {
+      trackLearningEvent("safe_finish_used", {
+        target_skill_id: state.targetSkillId,
+        support_level: attemptStage,
+      });
+    }
+    if (focusedRetry) {
+      trackLearningEvent("focused_retry_completed", {
+        target_skill_id: state.targetSkillId,
+        support_level: attemptStage,
+        focused_criterion_id: focusedRetry.criterionId,
+        valid_attempt: validAttempt,
+      });
+    }
+    const wasConfirmedAcrossDays = new Set(state.attempts
+      .filter((item) => item.validAttempt)
+      .map((item) => item.completedAt.slice(0, 10))).size >= 2;
+    const confirmedAcrossDays = new Set(next.attempts
+      .filter((item) => item.validAttempt)
+      .map((item) => item.completedAt.slice(0, 10))).size >= 2;
+    if (!wasConfirmedAcrossDays && confirmedAcrossDays) {
+      trackLearningEvent("later_day_confirmation", {
+        target_skill_id: state.targetSkillId,
+        confirmed_across_days: true,
+      });
+    }
     setStep("result");
     if (user) {
       setSyncState("syncing");
@@ -200,8 +370,35 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
     setReflection("");
     setUsedHint(false);
     setSafeFinished(false);
+    setPracticePaused(false);
+    setFocusedRetry(null);
     setAnxietyBefore(anxietyAfter);
     setStep("practice");
+    trackLearningEvent("controlled_variant_started", {
+      target_skill_id: state.targetSkillId,
+      support_level: state.stage,
+    });
+  };
+
+  const startFocusedRetry = () => {
+    if (!latestAttempt || !latestEvaluation) return;
+    setFocusedRetry({
+      attemptId: latestAttempt.id,
+      criterionId: latestEvaluation.improvementCriterionId,
+    });
+    setResponse("");
+    setReflection("");
+    setUsedHint(false);
+    setSafeFinished(false);
+    setPracticePaused(false);
+    setAnxietyBefore(anxietyAfter);
+    setStep("practice");
+    trackLearningEvent("focused_retry_started", {
+      target_skill_id: state.targetSkillId,
+      support_level: latestAttempt.stage,
+      variant_id: latestAttempt.variation.id,
+      focused_criterion_id: latestEvaluation.improvementCriterionId,
+    });
   };
 
   const chooseBridge = async (accepted: boolean) => {
@@ -214,6 +411,10 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
     };
     const next = { ...state, bridgeAccepted: accepted, bridge };
     saveState(next);
+    trackLearningEvent("real_life_bridge_offered", {
+      target_skill_id: state.targetSkillId,
+      support_level: state.stage,
+    });
     if (user) {
       setSyncState("syncing");
       const [journeyOk, bridgeOk] = await Promise.all([
@@ -248,6 +449,18 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
 
   const setSurpriseOptIn = (accepted: boolean) => {
     saveState({ ...state, surpriseOptIn: accepted });
+  };
+
+  const levelDown = () => {
+    const levels: RehearsalStage[] = ["guided", "prompted", "independent", "light-surprise", "connected-rehearsal"];
+    const nextStage = levels[Math.max(0, levels.indexOf(activeStage) - 1)];
+    if (nextStage === state.stage) return;
+    saveState({ ...state, stage: nextStage, surpriseOptIn: false });
+    setFocusedRetry(null);
+    trackLearningEvent("level_down_used", {
+      target_skill_id: state.targetSkillId,
+      support_level: nextStage,
+    });
   };
 
   if (!ready) return null;
@@ -332,21 +545,99 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
         </article>
       )}
 
+      {step === "future-context" && (
+        <article className="pilot-card repair-card" aria-labelledby="future-context-title">
+          <div className="pilot-step"><b>1</b><span>Future Rehearsal<small>Нэр болон таних мэдээлэл заавал оруулахгүй</small></span></div>
+          <h3 id="future-context-title">Ойрын нөхцөлөө хоёр минутад бэлдэе</h3>
+          <p>Бүх түүхийг бичих шаардлагагүй. Хэцүү санагдах нэг мөч болон бэлэн байлгах эхний өгүүлбэрээ сонгоно.</p>
+          <div className="fact-grid">
+            <label>Эвентийн төрөл
+              <select value={futureContext.eventType ?? ""} onChange={(event) => setFutureContext({ ...futureContext, eventType: event.target.value })}>
+                <option>Байгууллагын эвент</option>
+                <option>Багийн хурал</option>
+                <option>Жижиг бүлгийн яриа</option>
+                <option>Нэг хүнтэй чухал уулзалт</option>
+              </select>
+            </label>
+            <label>Оролцох хүмүүсийн үүрэг <span>(таслалаар салгана)</span>
+              <input
+                value={futureContext.peopleOrRoles?.join(", ") ?? ""}
+                onChange={(event) => setFutureContext({ ...futureContext, peopleOrRoles: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })}
+                placeholder="хамтрагч, багийн ахлах"
+              />
+            </label>
+            <label>Хамгийн хэцүү санагдаж буй мөч
+              <textarea rows={3} value={futureContext.fearedMoment ?? ""} onChange={(event) => setFutureContext({ ...futureContext, fearedMoment: event.target.value })} placeholder="Жишээ: Хоёр хүн зэрэг ярьсны дараа өөрийн санаагаа оруулах" />
+            </label>
+            <label>Бэлэн байлгах эхний өгүүлбэр
+              <textarea rows={3} value={futureContext.intendedOpening ?? ""} onChange={(event) => setFutureContext({ ...futureContext, intendedOpening: event.target.value })} placeholder="Жишээ: Таны хэлсэнтэй холбоод нэг санаа нэмье…" />
+            </label>
+          </div>
+          <div className="intensity-row">
+            <label htmlFor="future-intensity">Хүлээгдэж буй түгшүүр</label><b>{futureContext.intensity ?? 4}/10</b>
+            <input id="future-intensity" type="range" min="0" max="10" value={futureContext.intensity ?? 4} onChange={(event) => setFutureContext({ ...futureContext, intensity: Number(event.target.value) })} />
+          </div>
+          <p className="privacy-note">“Хадгалахгүй” сонговол энэ context refresh болон дараагийн нээлтэд хадгалагдахгүй.</p>
+          <div className="pilot-actions">
+            <button type="button" className="text-button" onClick={() => continueFromFuture("none")}>Хадгалахгүй үргэлжлүүлэх</button>
+            <button type="button" className="secondary-button" onClick={() => continueFromFuture("device")}>Зөвхөн төхөөрөмжид хадгалах</button>
+            <button type="button" className="primary-button" disabled={!user} title={!user ? "Cloud-д хадгалахын тулд нэвтэрнэ үү" : undefined} onClick={() => continueFromFuture("cloud")}>Cloud-д хадгалаад үргэлжлүүлэх</button>
+          </div>
+        </article>
+      )}
+
       {step === "practice" && (
         <article className="pilot-card rehearsal-card">
           <div className="pilot-step"><b>3</b><span>{stageLabels[activeStage]} rehearsal<small>Чадвар: санаагаа тодорхой оруулах · {mediaMode === "image_audio" ? "image + optional audio" : "text-only"}</small></span></div>
+          <div className="pilot-actions">
+            <button type="button" className="text-button" onClick={() => setPracticePaused((paused) => !paused)}>
+              {practicePaused ? "▶ Үргэлжлүүлэх" : "Ⅱ Pause"}
+            </button>
+            <button type="button" className="text-button" disabled={activeStage === "guided"} onClick={levelDown}>
+              ↓ Нэг шат зөөлрүүлэх
+            </button>
+          </div>
+          {practicePaused && (
+            <div className="safe-recommendation" role="status">
+              Түр зогслоо. Бэлэн үедээ ижил scene-ээс үргэлжлүүлнэ; таны бичсэн зүйл алдагдахгүй.
+            </div>
+          )}
           {state.stage === "light-surprise" && activeStage !== state.stage && (
             <p className="safe-recommendation">Түгшүүр 8–10 байгаа тул Light surprise-ийг түр хойшлуулж, Independent шатанд зөөлрүүллээ.</p>
           )}
           {state.stage === "independent" && (
             <label className="surprise-opt-in">
-              <input type="checkbox" checked={state.surpriseOptIn} onChange={(event) => setSurpriseOptIn(event.target.checked)} />
-              Тогтвортой болсны дараа нэг хөнгөн гэнэтийн хувилбар туршихыг зөвшөөрөх
+              <input
+                type="checkbox"
+                checked={state.surpriseOptIn}
+                disabled={!lightSurpriseReady}
+                onChange={(event) => setSurpriseOptIn(event.target.checked)}
+              />
+              {lightSurpriseReady
+                ? "Хоёр Prompted хувилбар батлагдсан. Нэг хөнгөн гэнэтийн хувилбар туршихыг зөвшөөрөх"
+                : "Light Surprise нээхийн өмнө хоёр өөр Prompted хувилбарт 2/3 шалгуур баталгаажуулна"}
             </label>
+          )}
+          {practiceContext && (
+            <div className="context-brief" aria-label="Таны сонгосон нөхцөл">
+              <span>{practiceContext.entryRoute === "past_repair"
+                ? "ӨМНӨХ МӨЧ"
+                : practiceContext.entryRoute === "future_rehearsal"
+                  ? "ИРЭЭДҮЙН НӨХЦӨЛ"
+                  : "ӨДӨР ТУТМЫН НӨХЦӨЛ"}</span>
+              <b>{practiceContext.decisiveMoment ?? practiceContext.fearedMoment ?? practiceContext.eventType}</b>
+              {(practiceContext.intendedOpening ?? practiceContext.desiredAction) && <p>{practiceContext.intendedOpening ?? practiceContext.desiredAction}</p>}
+            </div>
           )}
           <div className="variation-meta">
             <span>{variation.environment}</span><span>{variation.character}</span><span>{variation.tone}</span>
           </div>
+          {focusedRetry && retryEvaluation && (
+            <div className="safe-recommendation" aria-live="polite">
+              <b>Focused retry</b>
+              <p>{retryEvaluation.retryPrompt}</p>
+            </div>
+          )}
           <p className="scene-line">{variation.openingLine}</p>
           {variation.complication !== "гэнэтийн зүйлгүй" && <p className="complication">{variation.complication}</p>}
           <div className="intensity-row">
@@ -354,19 +645,21 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
             <input id="pilot-before" type="range" min="0" max="10" value={anxietyBefore} onChange={(event) => setAnxietyBefore(Number(event.target.value))} />
           </div>
           <h3>{variation.prompt}</h3>
-          <button type="button" className="hint-toggle" aria-expanded={usedHint} onClick={() => setUsedHint(!usedHint)}>◇ {usedHint ? "Hint нуух" : "Hint харах"}</button>
+          <button type="button" className="hint-toggle" disabled={practicePaused} aria-expanded={usedHint} onClick={() => setUsedHint(!usedHint)}>◇ {usedHint ? "Hint нуух" : "Hint харах"}</button>
           {usedHint && <div className="pilot-hint"><b>Хариултын бүтэц</b><p>{variation.promptSupport}</p><p>{variation.responseFrame}</p></div>}
           <label htmlFor="pilot-response">Таны хэлэх хариулт</label>
-          <textarea id="pilot-response" rows={4} value={response} onChange={(event) => setResponse(event.target.value)} placeholder={variation.responseFrame} />
+          <textarea id="pilot-response" rows={4} disabled={practicePaused} value={response} onChange={(event) => setResponse(event.target.value)} placeholder={variation.responseFrame} />
           <label htmlFor="pilot-reflection">Нэг өгүүлбэрийн reflection <span>(заавал биш)</span></label>
-          <textarea id="pilot-reflection" rows={2} value={reflection} onChange={(event) => setReflection(event.target.value)} placeholder="Энэ удаа би…" />
+          <textarea id="pilot-reflection" rows={2} disabled={practicePaused} value={reflection} onChange={(event) => setReflection(event.target.value)} placeholder="Энэ удаа би…" />
           <div className="intensity-row">
             <label htmlFor="pilot-after">Одоо түгшүүр ямар байна?</label><b>{anxietyAfter}/10</b>
-            <input id="pilot-after" type="range" min="0" max="10" value={anxietyAfter} onChange={(event) => setAnxietyAfter(Number(event.target.value))} />
+            <input id="pilot-after" type="range" min="0" max="10" disabled={practicePaused} value={anxietyAfter} onChange={(event) => setAnxietyAfter(Number(event.target.value))} />
           </div>
           <div className="pilot-actions">
             <button type="button" className="text-button" onClick={() => void finishAttempt(true)}>Энд аюулгүй дуусгах</button>
-            <button type="button" className="primary-button" disabled={!response.trim()} onClick={() => void finishAttempt(false)}>Давталтыг дуусгах</button>
+            <button type="button" className="primary-button" disabled={practicePaused || !response.trim()} onClick={() => void finishAttempt(false)}>
+              {focusedRetry ? "Focused retry-г дуусгах" : "Давталтыг дуусгах"}
+            </button>
           </div>
         </article>
       )}
@@ -374,7 +667,7 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
       {step === "media" && (
         <MediaPreview
           intensity={anxietyBefore}
-          onBack={() => setStep(state.repair ? "repair" : "intro")}
+          onBack={() => setStep(practiceContext?.entryRoute === "future_rehearsal" ? "future-context" : state.repair ? "repair" : "intro")}
           onTextOnly={() => {
             setMediaMode("text_voice");
             setStep("practice");
@@ -389,7 +682,11 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
       {step === "result" && (
         <article className="pilot-card pilot-result" aria-live="polite">
           <span className="complete-mark">{safeFinished ? "Ⅱ" : "✓"}</span>
-          <h3>{safeFinished ? "Энд зогссон нь зөв сонголт." : "Нэг утгатай давталт дууслаа."}</h3>
+          <h3>{safeFinished
+            ? "Энд зогссон нь зөв сонголт."
+            : latestEvaluation?.validAttempt
+              ? "Нэг утгатай давталт дууслаа."
+              : "Энэ оролдлогыг mastery-д тооцоогүй."}</h3>
           <p>{state.attempts.at(-1)?.decision === "pause"
             ? "Өнөөдөр энд амраад, дараа нь ижил эсвэл зөөлөн хувилбараас үргэлжлүүлнэ."
             : state.attempts.at(-1)?.decision === "consolidate"
@@ -399,12 +696,32 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
                 : `Дараагийн шат: ${stageLabels[state.stage]}.`}</p>
           {!safeFinished && (
             <div className="pilot-feedback">
-              <div className="feedback-line good"><b>✓ Сайн болсон</b><p>{feedback.positive}</p></div>
-              <div className="feedback-line improve"><b>→ Нэг сайжруулалт</b><p>{feedback.improve}</p></div>
+              {latestEvaluation?.validAttempt ? (
+                <>
+                  <div className="feedback-line good"><b>✓ Сайн болсон</b><p>{latestEvaluation.strength}</p></div>
+                  <div className="feedback-line improve">
+                    <b>→ Нэг сайжруулалт</b>
+                    <p>{latestEvaluation.improvement}</p>
+                    <p><b>Жишээ хувилбар:</b> “{latestEvaluation.examplePhrase}”</p>
+                  </div>
+                </>
+              ) : (
+                <div className="feedback-line improve">
+                  <b>Үнэлэхэд хангалтгүй байна</b>
+                  <p>{latestEvaluation?.improvement}</p>
+                </div>
+              )}
+              {latestAttempt?.retryOfAttemptId && (
+                <p className="safe-recommendation">
+                  {latestAttempt.criterionImproved
+                    ? "Focused retry дээр сонгосон шалгуур сайжирлаа."
+                    : "Сонгосон нэг шалгуурыг ижил scene дээр дахин тогтворжуулж болно."}
+                </p>
+              )}
             </div>
           )}
           <div className="result-stats"><span><b>{state.attempts.length}</b> нийт оролдлого</span><span><b>{anxietyBefore} → {anxietyAfter}</b> түгшүүр</span><span><b>{variation.changedDimensions.length}</b> өөрчилсөн хувьсагч</span></div>
-          {Math.max(anxietyBefore, anxietyAfter) < 8 && <div className="bridge-card">
+          {latestEvaluation?.validAttempt && Math.max(anxietyBefore, anxietyAfter) < 8 && <div className="bridge-card">
             <p className="eyebrow">OPTIONAL REAL-LIFE BRIDGE</p>
             <h4>Дараагийн уулзалтаас өмнө эхний нэг өгүүлбэрээ notes-д бичих үү?</h4>
             <p>Хэнд ч илгээх шаардлагагүй. Алгассан ч streak болон ахиц буурахгүй.</p>
@@ -412,8 +729,13 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
             <button type="button" className="text-button" onClick={() => void chooseBridge(false)}>Одоохондоо алгасах</button>
           </div>}
           <div className="pilot-actions">
-            <button type="button" className="primary-button" onClick={repeat}>Өөр жижиг хувилбараар давтах</button>
-            <button type="button" className="text-button" onClick={() => setStep("intro")}>Дуусгах</button>
+            {!safeFinished && latestEvaluation && (
+              <button type="button" className="primary-button" onClick={startFocusedRetry}>
+                Энэ нэг сайжруулалтыг дахин турших
+              </button>
+            )}
+            <button type="button" className="secondary-button" onClick={repeat}>Өөр жижиг хувилбараар давтах</button>
+            <button type="button" className="text-button" onClick={() => { onPracticeFinished?.(); setStep("intro"); }}>Дуусгах</button>
           </div>
         </article>
       )}

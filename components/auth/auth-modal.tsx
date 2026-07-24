@@ -12,7 +12,10 @@ export function AuthModal() {
   const [busy, setBusy] = useState(false);
   if (!authOpen) return null;
 
-  const callbackUrl = () => buildAuthCallbackUrl(window.location.origin, window.location.pathname);
+  const callbackUrl = () => buildAuthCallbackUrl(
+    window.location.origin,
+    `${window.location.pathname}${window.location.search}`,
+  );
 
   const signInWithGoogle = async () => {
     const client = getSupabaseBrowserClient();

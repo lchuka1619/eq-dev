@@ -56,6 +56,8 @@ export type AttemptEvidence = {
   completedAt?: string;
   variationId?: string;
   decision?: ProgressDecision;
+  validAttempt?: boolean;
+  demonstratedCriteria?: number;
 };
 
 export type ProgressDecision = "repeat" | "soften" | "progress" | "consolidate" | "pause";
@@ -183,6 +185,8 @@ export function decideProgression(
   const previous = history.at(-2);
   const latestStable = latest &&
     latest.completed &&
+    latest.validAttempt === true &&
+    (latest.demonstratedCriteria ?? 0) >= 2 &&
     !latest.safeFinished &&
     !latest.usedHint &&
     latest.anxietyAfter <= latest.anxietyBefore + 1;
@@ -191,7 +195,12 @@ export function decideProgression(
   }
 
   const stable = recent.length === 3 && recent.every((item) =>
-    item.completed && !item.safeFinished && !item.usedHint && item.anxietyAfter <= item.anxietyBefore + 1
+    item.completed &&
+    item.validAttempt === true &&
+    (item.demonstratedCriteria ?? 0) >= 2 &&
+    !item.safeFinished &&
+    !item.usedHint &&
+    item.anxietyAfter <= item.anxietyBefore + 1
   );
   const distinctDates = new Set(recent.map((item) => item.completedAt?.slice(0, 10)).filter(Boolean));
   const distinctVariants = new Set(recent.map((item) => item.variationId).filter(Boolean));
@@ -210,32 +219,23 @@ export function decideProgression(
 
 export function canUseLightSurprise(history: AttemptEvidence[]) {
   const recent = history.slice(-3);
-  if (recent.length < 3) return false;
-  return recent.every((item) =>
+  if (recent.some((item) =>
+    item.safeFinished ||
+    item.anxietyAfter >= 8 ||
+    item.anxietyAfter - item.anxietyBefore >= 2
+  )) return false;
+  const promptedEvidence = history.filter((item) =>
+    item.stage === "prompted" &&
     item.completed &&
+    item.validAttempt === true &&
+    (item.demonstratedCriteria ?? 0) >= 2 &&
     !item.safeFinished &&
     item.anxietyAfter < 8 &&
     item.anxietyAfter <= item.anxietyBefore + 1
   );
+  return new Set(promptedEvidence.map((item) => item.variationId).filter(Boolean)).size >= 2;
 }
 
 export function safeStageForIntensity(stage: RehearsalStage, intensity: number): RehearsalStage {
   return stage === "light-surprise" && intensity >= 8 ? "independent" : stage;
-}
-
-export function evaluatePracticeResponse(response: string) {
-  const normalized = response.trim().toLocaleLowerCase("mn");
-  const hasConnection = ["холбоод", "таны хэлсэн", "энэ санаа", "нэмж"].some((phrase) => normalized.includes(phrase));
-  const hasQuestion = normalized.includes("?");
-  const concise = normalized.length <= 220;
-  return {
-    positive: hasConnection
-      ? "Өмнөх санаатай холбоод ярианд орсон нь ойлгомжтой боллоо."
-      : concise
-        ? "Санаагаа богино, сонсоход хялбар хэллээ."
-        : "Ярианд орж, санаагаа илэрхийлж чадлаа.",
-    improve: hasQuestion
-      ? "Одоо гол саналаа эхний өгүүлбэрт арай тодорхой байрлуулаарай."
-      : "Нөгөө хүнд үргэлжлүүлэх орон зай өгөх нэг богино асуулт нэмээрэй.",
-  };
 }
