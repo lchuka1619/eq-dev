@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { MediaPreview } from "@/components/personal-practice/media-preview";
+import { ConnectedRehearsal } from "@/components/personal-practice/connected-rehearsal";
 import {
   deleteCloudRepair,
   hydratePersonalPractice,
+  syncBridgeLifecycle,
   syncBridgeChoice,
   syncPersonalPractice,
 } from "@/lib/personal-practice/cloud-practice";
@@ -27,7 +29,12 @@ import {
   type SceneRenderer,
 } from "@/lib/personal-practice/variation-engine";
 
-type Step = "intro" | "repair" | "media" | "practice" | "result";
+type Step = "intro" | "bridge-reflection" | "repair" | "media" | "practice" | "connected" | "result";
+
+type Props = {
+  isDaySeven?: boolean;
+  onDaySevenComplete?: (before: number, after: number) => void;
+};
 
 const stageLabels: Record<RehearsalStage, string> = {
   guided: "Guided",
@@ -45,7 +52,7 @@ const blankRepair: RepairDraft = {
   saveChoice: "device",
 };
 
-export function PersonalPracticePilot() {
+export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }: Props) {
   const { user, setSyncState } = useAuth();
   const [state, setState] = useState<PersonalPracticeState>(() => emptyPersonalPracticeState(TARGET_SKILL_ID));
   const [ready, setReady] = useState(false);
@@ -58,6 +65,11 @@ export function PersonalPracticePilot() {
   const [usedHint, setUsedHint] = useState(false);
   const [safeFinished, setSafeFinished] = useState(false);
   const [mediaMode, setMediaMode] = useState<Extract<SceneRenderer, "text_voice" | "image_audio">>("image_audio");
+  const [bridgeDidIt, setBridgeDidIt] = useState<boolean | null>(null);
+  const [bridgeBefore, setBridgeBefore] = useState(4);
+  const [bridgeAfter, setBridgeAfter] = useState(4);
+  const [bridgeReflection, setBridgeReflection] = useState("");
+  const [openedAt] = useState(() => new Date().toISOString());
   const hydratedUser = useRef<string | null>(null);
   const activeStage = safeStageForIntensity(state.stage, anxietyBefore);
   const variation = useMemo(
@@ -185,11 +197,43 @@ export function PersonalPracticePilot() {
   };
 
   const chooseBridge = async (accepted: boolean) => {
-    const next = { ...state, bridgeAccepted: accepted };
+    const now = new Date().toISOString();
+    const bridge = {
+      ...state.bridge,
+      status: accepted ? "accepted" as const : "skipped" as const,
+      offeredAt: state.bridge.offeredAt ?? now,
+      respondedAt: now,
+    };
+    const next = { ...state, bridgeAccepted: accepted, bridge };
     saveState(next);
     if (user) {
       setSyncState("syncing");
-      const ok = await syncBridgeChoice(user.id, next, accepted);
+      const [journeyOk, bridgeOk] = await Promise.all([
+        syncBridgeChoice(user.id, next, accepted),
+        syncBridgeLifecycle(user.id, next, bridge),
+      ]);
+      const ok = journeyOk && bridgeOk;
+      setSyncState(ok ? "synced" : "pending");
+    }
+  };
+
+  const saveBridgeReflection = async () => {
+    if (bridgeDidIt === null) return;
+    const bridge = {
+      ...state.bridge,
+      status: "reflected" as const,
+      didIt: bridgeDidIt,
+      intensityBefore: bridgeBefore,
+      intensityAfter: bridgeAfter,
+      reflection: bridgeReflection.trim(),
+      respondedAt: new Date().toISOString(),
+    };
+    const next = { ...state, bridgeAccepted: true, bridge };
+    saveState(next);
+    setStep("intro");
+    if (user) {
+      setSyncState("syncing");
+      const ok = await syncBridgeLifecycle(user.id, next, bridge);
       setSyncState(ok ? "synced" : "pending");
     }
   };
@@ -199,6 +243,8 @@ export function PersonalPracticePilot() {
   };
 
   if (!ready) return null;
+  const bridgeFollowUpDue = state.bridge?.status === "accepted" &&
+    Boolean(state.bridge.respondedAt && state.bridge.respondedAt < openedAt);
 
   return (
     <section className="personal-pilot section-shell" id="personal-practice-pilot" aria-labelledby="personal-pilot-title">
@@ -217,9 +263,38 @@ export function PersonalPracticePilot() {
             <h3>Санаагаа ярианд тайван оруулах</h3>
             <p>Өмнөх таагүй мөчийг бүхэлд нь шинжлэхгүй. Нэг жижиг мөч сонгоод, дараагийн удаа хэрэглэх хариугаа аюулгүй давтана.</p>
             <p className="safety-note">Энэ нь онош эсвэл trauma treatment биш. Хуримтлагдсан таагүй туршлага нөлөөлж байж болохыг зөөлөн ажиглах дасгал.</p>
+            {bridgeFollowUpDue && <button className="secondary-button" type="button" onClick={() => setStep("bridge-reflection")}>Өмнөх жижиг алхмаа эргэн харах</button>}
+            {isDaySeven && <button className="secondary-button connected-entry" type="button" onClick={() => setStep("connected")}>Day 7 Connected rehearsal</button>}
           </div>
           <button className="primary-button" type="button" onClick={beginRepair}>Pilot дасгал эхлэх</button>
         </article>
+      )}
+
+      {step === "bridge-reflection" && (
+        <article className="pilot-card bridge-reflection-card">
+          <p className="eyebrow">REAL-LIFE BRIDGE FOLLOW-UP</p>
+          <h3>Жижиг алхам бодит нөхцөлд яаж өнгөрөв?</h3>
+          <fieldset>
+            <legend>Сонгосон жижиг алхмаа хийсэн үү?</legend>
+            <button type="button" aria-pressed={bridgeDidIt === true} onClick={() => setBridgeDidIt(true)}>Тийм</button>
+            <button type="button" aria-pressed={bridgeDidIt === false} onClick={() => setBridgeDidIt(false)}>Үгүй — энэ нь failure биш</button>
+          </fieldset>
+          <div className="fact-grid">
+            <div className="intensity-row"><label htmlFor="bridge-before">Эхлэхийн өмнө</label><b>{bridgeBefore}/10</b><input id="bridge-before" type="range" min="0" max="10" value={bridgeBefore} onChange={(event) => setBridgeBefore(Number(event.target.value))} /></div>
+            <div className="intensity-row"><label htmlFor="bridge-after">Дараа нь</label><b>{bridgeAfter}/10</b><input id="bridge-after" type="range" min="0" max="10" value={bridgeAfter} onChange={(event) => setBridgeAfter(Number(event.target.value))} /></div>
+          </div>
+          <label htmlFor="bridge-reflection">Бодсоноос юу өөр байсан бэ?</label>
+          <textarea id="bridge-reflection" rows={3} value={bridgeReflection} onChange={(event) => setBridgeReflection(event.target.value)} />
+          <div className="pilot-actions"><button type="button" className="text-button" onClick={() => setStep("intro")}>Одоо алгасах</button><button type="button" className="primary-button" disabled={bridgeDidIt === null} onClick={() => void saveBridgeReflection()}>Reflection хадгалах</button></div>
+        </article>
+      )}
+
+      {step === "connected" && (
+        <ConnectedRehearsal
+          journeyId={state.journeyId}
+          onClose={() => setStep("intro")}
+          onComplete={(before, after) => onDaySevenComplete?.(before, after)}
+        />
       )}
 
       {step === "repair" && (

@@ -1246,7 +1246,12 @@ export default function Home() {
         </aside>
       </section>
 
-      {pastEventPilotEnabled && <PersonalPracticePilot />}
+      {pastEventPilotEnabled && (
+        <PersonalPracticePilot
+          isDaySeven={plan?.currentDay === 7}
+          onDaySevenComplete={(before, after) => { completeToday(before, after); }}
+        />
+      )}
 
       <section className="arena-section" id="arena">
         <div className="section-shell">

@@ -5,7 +5,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "./auth-provider";
 
 export function AuthModal() {
-  const { authOpen, setAuthOpen, configured } = useAuth();
+  const { authOpen, setAuthOpen, configured, authError, clearAuthError } = useAuth();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -18,6 +18,7 @@ export function AuthModal() {
     if (!client) return;
     setBusy(true);
     setMessage("");
+    clearAuthError();
     const { error } = await client.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: callbackUrl() },
@@ -34,6 +35,7 @@ export function AuthModal() {
     if (!client || !email.trim()) return;
     setBusy(true);
     setMessage("");
+    clearAuthError();
     const { error } = await client.auth.signInWithOtp({
       email: email.trim(),
       options: { emailRedirectTo: callbackUrl() },
@@ -62,7 +64,11 @@ export function AuthModal() {
             </form>
           </>
         )}
-        {message && <div className={`auth-message ${message.includes("илгээлээ") ? "success" : "error"}`}>{message}</div>}
+        {(authError || message) && (
+          <div className={`auth-message ${!authError && message.includes("илгээлээ") ? "success" : "error"}`}>
+            {authError ?? message}
+          </div>
+        )}
         <small>Audio болон transcript cloud database-д хадгалахгүй.</small>
       </section>
     </div>

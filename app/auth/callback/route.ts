@@ -17,6 +17,6 @@ export async function GET(request: Request) {
   }
 
   const errorUrl = new URL(next, url.origin);
-  errorUrl.searchParams.set("auth_error", "callback");
+  errorUrl.searchParams.set("auth_error", code ? "exchange_failed" : "missing_code");
   return NextResponse.redirect(errorUrl);
 }

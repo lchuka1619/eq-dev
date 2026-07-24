@@ -756,6 +756,25 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
 .media-fallback { border-style: dashed; }
 .media-preview:not(.reduced-motion) .media-frame { animation: mediaReveal .35s ease-out both; }
 @keyframes mediaReveal { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: scale(1); } }
+.connected-entry { margin-left: 10px; }
+.bridge-reflection-card fieldset { border: 0; display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0; padding: 0; }
+.bridge-reflection-card legend { color: #29443e; font-weight: 750; margin-bottom: 10px; width: 100%; }
+.bridge-reflection-card fieldset button {
+  background: white; border: 1px solid #bdd0ca; border-radius: 999px; color: #24544c; padding: 10px 14px;
+}
+.bridge-reflection-card fieldset button[aria-pressed="true"] { background: #dcece6; border-color: #17675e; }
+.connected-head { align-items: center; display: flex; justify-content: space-between; gap: 16px; }
+.connected-head > div { display: flex; gap: 8px; }
+.connected-head > div:first-child { flex-direction: column; }
+.connected-head button {
+  background: white; border: 1px solid #bdd0ca; border-radius: 999px; color: #24544c; padding: 9px 12px;
+}
+.connected-progress { display: grid; gap: 7px; grid-template-columns: repeat(7, 1fr); margin: 24px 0; }
+.connected-progress i { background: #d8ded9; border-radius: 99px; height: 6px; }
+.connected-progress i.active { background: #17675e; }
+.connected-session blockquote { background: #eef4f0; border-radius: 18px; color: #24453e; font-size: 18px; margin: 12px 0 22px; padding: 20px; }
+.connected-session > label { color: #29443e; display: block; font-weight: 750; margin: 18px 0 8px; }
+.connected-paused { padding: 60px 20px; text-align: center; }
 
 @media (max-width: 720px) {
   .personal-pilot { padding-block: 56px; }
@@ -766,4 +785,7 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
   .readiness-card { grid-template-columns: 1fr; }
   .media-controls { align-items: stretch; flex-direction: column; }
   .media-controls button { width: 100%; }
+  .connected-entry { margin: 10px 0 0; }
+  .connected-head { align-items: stretch; flex-direction: column; }
+  .connected-head > div:last-child button { flex: 1; }
 }

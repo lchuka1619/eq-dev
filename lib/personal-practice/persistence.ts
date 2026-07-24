@@ -2,6 +2,17 @@ import type { AttemptEvidence, ProgressDecision, RehearsalStage, Variation } fro
 
 export const PERSONAL_PRACTICE_KEY = "eq-personal-practice-pilot-v1";
 
+export type BridgeLifecycle = {
+  id: string;
+  status: "none" | "accepted" | "skipped" | "reflected";
+  offeredAt: string | null;
+  respondedAt: string | null;
+  didIt: boolean | null;
+  intensityBefore: number | null;
+  intensityAfter: number | null;
+  reflection: string;
+};
+
 export type RepairDraft = {
   moments: string[];
   selectedMoment: string;
@@ -26,6 +37,7 @@ export type PersonalPracticeState = {
   repair: RepairDraft | null;
   attempts: PersonalAttempt[];
   bridgeAccepted: boolean | null;
+  bridge: BridgeLifecycle;
   surpriseOptIn: boolean;
 };
 
@@ -37,6 +49,16 @@ export function emptyPersonalPracticeState(targetSkillId: string): PersonalPract
     repair: null,
     attempts: [],
     bridgeAccepted: null,
+    bridge: {
+      id: crypto.randomUUID(),
+      status: "none",
+      offeredAt: null,
+      respondedAt: null,
+      didIt: null,
+      intensityBefore: null,
+      intensityAfter: null,
+      reflection: "",
+    },
     surpriseOptIn: false,
   };
 }
@@ -44,7 +66,17 @@ export function emptyPersonalPracticeState(targetSkillId: string): PersonalPract
 export function readPersonalPracticeState(targetSkillId: string): PersonalPracticeState {
   try {
     const saved = localStorage.getItem(PERSONAL_PRACTICE_KEY);
-    return saved ? JSON.parse(saved) as PersonalPracticeState : emptyPersonalPracticeState(targetSkillId);
+    if (!saved) return emptyPersonalPracticeState(targetSkillId);
+    const parsed = JSON.parse(saved) as Partial<PersonalPracticeState>;
+    const empty = emptyPersonalPracticeState(targetSkillId);
+    return {
+      ...empty,
+      ...parsed,
+      bridge: parsed.bridge ?? {
+        ...empty.bridge,
+        status: parsed.bridgeAccepted === true ? "accepted" : parsed.bridgeAccepted === false ? "skipped" : "none",
+      },
+    };
   } catch {
     return emptyPersonalPracticeState(targetSkillId);
   }
