@@ -3,6 +3,7 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { safeAuthDestination } from "@/lib/auth/destination";
 import type { SyncState } from "@/lib/supabase/types";
 
 type AuthContextValue = {
@@ -38,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (code) {
         const callbackUrl = new URL("/auth/callback", currentUrl.origin);
         callbackUrl.searchParams.set("code", code);
-        callbackUrl.searchParams.set("next", currentUrl.pathname === "/auth/callback" ? "/" : currentUrl.pathname);
+        callbackUrl.searchParams.set("next", safeAuthDestination(currentUrl.pathname));
         window.location.replace(callbackUrl);
         return;
       }

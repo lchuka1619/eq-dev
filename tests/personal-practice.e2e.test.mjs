@@ -82,7 +82,18 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
       }
     });
     await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Сонсож ойлгоод, тодорхой хариулъя" }).waitFor();
+    assert.equal(await page.locator("#personal-practice-pilot").count(), 0);
+    assert.equal(await page.locator("#arena").count(), 0);
+    await page.getByRole("link", { name: "Дасгал эхлэх" }).click();
+    await page.waitForURL(`${baseUrl}/today`);
     await page.getByRole("heading", { name: "Нэг өмнөх мөчийг аюулгүй засварлах" }).waitFor();
+    const mobileOverlap = await page.evaluate(() => {
+      const nav = document.querySelector(".mobile-app-nav")?.getBoundingClientRect();
+      const card = document.querySelector(".today-router-card")?.getBoundingClientRect();
+      return nav && card ? Math.max(0, card.bottom - nav.top) : null;
+    });
+    assert.equal(mobileOverlap, 0);
     await page.getByRole("button", { name: "Past Event Repair эхлэх" }).click();
     await page.getByRole("button", { name: "Алгасаад үргэлжлүүлэх" }).click();
     await page.getByRole("img", { name: /Тайван хурлын өрөөнд/ }).waitFor();
@@ -113,6 +124,7 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     });
     assert.equal(layout.horizontalScroll, 0);
     assert.equal(layout.pilotLabel, "personal-pilot-title");
+    assert.equal(await page.locator(".mobile-app-nav").getByRole("link", { name: "Өнөөдөр", exact: true }).getAttribute("aria-current"), "page");
 
     await page.evaluate(() => {
       const practice = JSON.parse(localStorage.getItem("eq-personal-practice-pilot-v1"));
@@ -195,11 +207,30 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     assert.equal(saved.connected.pauseCount, 1);
     assert.equal(saved.connected.usedRecovery, true);
 
+    for (const destination of [
+      { label: "Замнал", path: "/journey", heading: "Нэг чадварыг өдөр бүр бататга" },
+      { label: "Ахиц", path: "/progress", heading: "Төгс биш, тогтвортой" },
+      { label: "Профайл", path: "/profile", heading: "Таны account, таны хяналт" },
+      { label: "Өнөөдөр", path: "/today", heading: "Нэг өмнөх мөчийг аюулгүй засварлах" },
+    ]) {
+      const navLink = page.locator(".mobile-app-nav").getByRole("link", { name: destination.label, exact: true });
+      await navLink.click();
+      await page.waitForURL(`${baseUrl}${destination.path}`);
+      await page.getByRole("heading", { name: destination.heading }).waitFor();
+      assert.equal(await navLink.getAttribute("aria-current"), "page");
+    }
+
     await page.goto(`${baseUrl}/?code=invalid-oauth-code`, { waitUntil: "networkidle" });
     await page.getByRole("dialog", { name: "Ахицаа бүх төхөөрөмждөө хадгалах" }).waitFor();
     await page.getByText("Нэвтрэх session үүсгэж чадсангүй. Supabase Redirect URLs тохиргоог шалгаад дахин оролдоно уу.").waitFor();
+    assert.equal(new URL(page.url()).pathname, "/today");
     assert.equal(new URL(page.url()).searchParams.has("code"), false);
     assert.equal(new URL(page.url()).searchParams.has("auth_error"), false);
+
+    const externalResponse = await page.goto(`${baseUrl}/auth/callback?next=https://evil.example`, { waitUntil: "networkidle" });
+    assert.ok(externalResponse);
+    assert.equal(new URL(page.url()).origin, baseUrl);
+    assert.equal(new URL(page.url()).pathname, "/today");
   } finally {
     await browser?.close();
     await server.close();

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Keep this file LF-only; npm invokes it through Bash on Windows too.
 set -euo pipefail
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

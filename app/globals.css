@@ -772,6 +772,80 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
 .connected-progress { display: grid; gap: 7px; grid-template-columns: repeat(7, 1fr); margin: 24px 0; }
 .connected-progress i { background: #d8ded9; border-radius: 99px; height: 6px; }
 .connected-progress i.active { background: #17675e; }
+
+/* Public landing and Personal Practice app shell */
+.public-landing { min-height: 100vh; background: linear-gradient(135deg, #fbf7ee 0%, #f7f4ec 58%, #e7f0ea 100%); }
+.public-header, .app-header { width: min(1280px, calc(100% - 40px)); min-height: 76px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.public-header .text-button { color: var(--teal); }
+.public-hero { width: min(1180px, calc(100% - 40px)); min-height: calc(100vh - 76px); margin: 0 auto; padding: 64px 0 90px; display: grid; grid-template-columns: 1.25fr .75fr; gap: 80px; align-items: center; }
+.public-hero h1 { max-width: 760px; margin: 16px 0 22px; color: var(--teal); font-size: clamp(54px, 7.2vw, 96px); line-height: .94; letter-spacing: -.065em; }
+.public-hero > div > p:not(.eyebrow) { max-width: 630px; color: var(--muted); font-size: 19px; line-height: 1.7; }
+.public-hero > div > small { display: block; max-width: 580px; margin-top: 20px; color: var(--muted); line-height: 1.5; }
+.landing-actions { margin-top: 32px; display: flex; gap: 12px; align-items: center; }
+.landing-actions a { text-decoration: none; }
+.public-hero aside { padding: 32px; border: 1px solid #d6e0da; border-radius: 28px; background: rgba(255,255,255,.74); box-shadow: var(--shadow); display: grid; grid-template-columns: 36px 1fr; gap: 4px 14px; }
+.public-hero aside span { grid-row: span 2; width: 34px; height: 34px; border-radius: 50%; background: var(--mint-pale); color: var(--teal); display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+.public-hero aside b { color: var(--teal); }
+.public-hero aside p { margin: 0 0 22px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.route-loading { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 14px; color: var(--muted); background: #fbfaf6; }
+
+.app-shell { min-height: 100vh; padding-top: 76px; background: #fbfaf6; }
+.app-header { position: fixed; z-index: 90; inset: 0 0 auto; width: 100%; padding: 0 max(24px, calc((100% - 1280px) / 2)); border-bottom: 1px solid var(--border); background: rgba(255,255,255,.94); backdrop-filter: blur(16px); }
+.desktop-app-nav { display: flex; align-items: center; gap: 6px; }
+.desktop-app-nav a { padding: 10px 14px; border-radius: 999px; color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 700; }
+.desktop-app-nav a[aria-current="page"] { color: var(--teal); background: var(--mint-pale); }
+.mobile-app-nav { display: none; }
+.app-content { min-height: calc(100vh - 76px); }
+.practice-experience .hero { min-height: auto; padding-top: 70px; grid-template-columns: 1fr; }
+.practice-experience .hero-main > .eyebrow { margin-bottom: 18px; }
+.app-footer { padding-bottom: 26px; }
+
+.journey-page, .profile-page { min-height: calc(100vh - 160px); padding-top: 72px; padding-bottom: 90px; }
+.journey-page .section-heading h1, .profile-page .section-heading h1 { margin: 0; color: var(--teal); font-size: clamp(38px, 5vw, 62px); line-height: 1; letter-spacing: -.055em; }
+.journey-summary-card { margin: 42px 0 24px; padding: 30px; border-radius: 24px; background: var(--teal); color: white; display: flex; justify-content: space-between; gap: 30px; align-items: center; }
+.journey-summary-card span { color: var(--mint); font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.journey-summary-card strong { display: block; margin-top: 7px; font-size: 25px; }
+.journey-summary-card p { margin: 8px 0 0; color: #d4e7e2; }
+.journey-summary-card a { text-decoration: none; white-space: nowrap; }
+.journey-days { margin: 0; padding: 0; display: grid; gap: 10px; list-style: none; }
+.journey-days li { padding: 18px 22px; border: 1px solid var(--border); border-radius: 17px; background: #fff; display: grid; grid-template-columns: 38px 1fr auto; gap: 15px; align-items: center; }
+.journey-days li > span { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #eef1ed; color: var(--muted); font-weight: 800; }
+.journey-days li.completed > span { background: var(--mint-pale); color: var(--teal); }
+.journey-days li.today { border-color: var(--teal-bright); box-shadow: inset 0 0 0 1px var(--teal-bright); }
+.journey-days b, .journey-days small { display: block; }
+.journey-days small, .journey-days em { margin-top: 4px; color: var(--muted); font-size: 12px; font-style: normal; }
+.journey-empty { margin-top: 42px; padding: 36px; border: 1px solid var(--border); border-radius: 24px; background: #fff; }
+.journey-empty a { display: inline-flex; margin-top: 14px; text-decoration: none; }
+.practice-view-progress .progress-section { padding-top: 76px; padding-bottom: 100px; }
+.profile-grid { margin-top: 44px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.profile-grid article { padding: 30px; border: 1px solid var(--border); border-radius: 24px; background: #fff; box-shadow: var(--shadow); }
+.profile-grid h2 { color: var(--teal); }
+.profile-grid li { margin: 12px 0; color: var(--muted); line-height: 1.55; }
+
+@media (max-width: 760px) {
+  .public-header, .public-hero { width: min(100% - 28px, 1180px); }
+  .public-header .brand span:last-child, .app-header .brand span:last-child { display: none; }
+  .public-hero { min-height: auto; padding: 54px 0 80px; grid-template-columns: 1fr; gap: 42px; }
+  .public-hero h1 { font-size: clamp(48px, 14vw, 68px); }
+  .landing-actions { align-items: stretch; flex-direction: column; }
+  .landing-actions > * { justify-content: center; width: 100%; }
+  .app-shell { padding-top: 66px; padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  .app-header { min-height: 66px; padding: 0 16px; }
+  .desktop-app-nav { display: none; }
+  .mobile-app-nav { position: fixed; z-index: 100; inset: auto 0 0; min-height: 68px; padding: 7px 8px calc(7px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: rgba(255,255,255,.97); display: grid; grid-template-columns: repeat(4, 1fr); box-shadow: 0 -10px 35px rgba(18,49,45,.08); }
+  .mobile-app-nav a { min-height: 54px; border-radius: 12px; color: var(--muted); text-decoration: none; display: grid; place-content: center; justify-items: center; gap: 3px; font-size: 10px; font-weight: 750; }
+  .mobile-app-nav a span { font-size: 17px; line-height: 1; }
+  .mobile-app-nav a[aria-current="page"] { color: var(--teal); background: var(--mint-pale); }
+  .practice-experience .hero { padding-top: 42px; }
+  .journey-page, .profile-page { padding-top: 42px; padding-bottom: 40px; }
+  .journey-summary-card { align-items: stretch; flex-direction: column; }
+  .journey-summary-card a { justify-content: center; }
+  .journey-days li { padding: 15px; grid-template-columns: 36px 1fr; }
+  .journey-days em { grid-column: 2; }
+  .profile-grid { grid-template-columns: 1fr; }
+  .practice-view-progress .progress-section { padding-top: 46px; padding-bottom: 40px; }
+  .app-footer { display: none; }
+}
 .connected-session blockquote { background: #eef4f0; border-radius: 18px; color: #24453e; font-size: 18px; margin: 12px 0 22px; padding: 20px; }
 .connected-session > label { color: #29443e; display: block; font-weight: 750; margin: 18px 0 8px; }
 .connected-paused { padding: 60px 20px; text-align: center; }

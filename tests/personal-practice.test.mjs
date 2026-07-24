@@ -1,12 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { completeLearningPlanDay, todayKey } from "../lib/plan/learning-plan.ts";
+import { buildAuthCallbackUrl, safeAuthDestination } from "../lib/auth/destination.ts";
 import {
   TARGET_SKILL_ID,
   createVariation,
   decideProgression,
   safeStageForIntensity,
 } from "../lib/personal-practice/variation-engine.ts";
+
+test("auth destination allows only canonical app routes", () => {
+  assert.equal(safeAuthDestination("/progress"), "/progress");
+  assert.equal(safeAuthDestination("/today"), "/today");
+  assert.equal(safeAuthDestination("https://evil.example"), "/today");
+  assert.equal(safeAuthDestination("//evil.example"), "/today");
+  assert.equal(safeAuthDestination("/auth/callback"), "/today");
+  assert.equal(new URL(buildAuthCallbackUrl("https://eq-dev-xi.vercel.app", "/")).searchParams.get("next"), "/today");
+  assert.equal(new URL(buildAuthCallbackUrl("https://eq-dev-xi.vercel.app", "/progress")).searchParams.get("next"), "/progress");
+});
 import { mergeHydratedPersonalPractice } from "../lib/personal-practice/hydration.ts";
 import { isPastEventPilotEnabled, recommendTodayRoute } from "../lib/personal-practice/today-router.ts";
 import { ideationEventMedia, mediaAssetForIntensity } from "../lib/personal-practice/media-assets.ts";

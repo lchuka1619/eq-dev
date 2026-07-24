@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { buildAuthCallbackUrl } from "@/lib/auth/destination";
 import { useAuth } from "./auth-provider";
 
 export function AuthModal() {
@@ -11,7 +12,7 @@ export function AuthModal() {
   const [busy, setBusy] = useState(false);
   if (!authOpen) return null;
 
-  const callbackUrl = () => `${window.location.origin}/auth/callback?next=${encodeURIComponent(window.location.pathname)}`;
+  const callbackUrl = () => buildAuthCallbackUrl(window.location.origin, window.location.pathname);
 
   const signInWithGoogle = async () => {
     const client = getSupabaseBrowserClient();
