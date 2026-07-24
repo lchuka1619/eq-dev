@@ -26,6 +26,7 @@ export type PersonalPracticeState = {
   repair: RepairDraft | null;
   attempts: PersonalAttempt[];
   bridgeAccepted: boolean | null;
+  surpriseOptIn: boolean;
 };
 
 export function emptyPersonalPracticeState(targetSkillId: string): PersonalPracticeState {
@@ -36,6 +37,7 @@ export function emptyPersonalPracticeState(targetSkillId: string): PersonalPract
     repair: null,
     attempts: [],
     bridgeAccepted: null,
+    surpriseOptIn: false,
   };
 }
 

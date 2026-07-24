@@ -1,7 +1,8 @@
 # EQ Dev — Past Event Repair & Varied Simulation PRD v0.1
 
-**Огноо:** 2026-07-24
-**Статус:** Personal Practice pilot
+**Огноо:** 2026-07-24  
+**Сүүлийн шинэчлэлт:** 2026-07-24 — mastery model ба immersive vision  
+**Статус:** Personal Practice pilot  
 **Бүтээгдэхүүний ангилал:** Human Skills Simulation Coach
 
 ## 1. Асуудал
@@ -131,6 +132,16 @@ Scene нь дараах slot-оос эвлэнэ:
 - өмнөх variant-тай яг ижил opening + persona + friction хослолыг шууд давтахгүй;
 - хэрэглэгч replay хүсвэл deterministic seed ашиглана.
 
+#### Mastery ба progression policy
+
+Нэг чадварыг “нэг удаа зөв хэлсэн”-ээр эзэмшсэн гэж тооцохгүй:
+
+`introduced → repeating → stabilizing → independent → adapting → consolidating`
+
+Progression decision нь `repeat | soften | progress | consolidate | pause` байна. Шийдвэрийг сүүлийн 3 variant-ийн outcome, prompt/hint/recovery usage, before/after intensity, user confidence/difficulty, safe finish/abrupt quit, өөр өдөрт дахин хийсэн эсэхийг хамтатган гаргана.
+
+Нэг self-rating, нэг LLM score эсвэл нийт completion count дангаараа difficulty өсгөхгүй. Эхний content heuristic нь **70% familiar / 20% small variation / 10% light surprise**; нэг давталтаар 1–2 slot л солигдоно. Шат ахисны дараа consolidation variant өгнө.
+
 ### 6.5 Media ladder
 
 1. Static image
@@ -152,6 +163,34 @@ Bridge нь:
 - no streak penalty;
 - intensity 8–10 үед default-аар нуусан;
 - “хийсэн/хийгээгүй” бус “юу ажигласан?” reflection-тэй байна.
+
+### 6.7 Entry router
+
+Today дээр бүх feature-ийг зэрэг сонгуулахгүй. Нэг богино readiness check-ээр:
+
+1. `past_repair` — өмнөх ижил үйл явдлын дурсамж саад болж байгаа;
+2. `future_rehearsal` — ойрын тодорхой эвентэд бэлтгэх;
+3. `daily_skill_loop` — тодорхой эвентгүйгээр нэг чадвар тогтворжуулах
+
+гэсэн замын нэгийг санал болгоно. Recommendation тайлбартай, override боломжтой, Past Event Repair үргэлж optional байна.
+
+### 6.8 Long-term immersive vision — Social Flight Simulator
+
+> Хэрэглэгч бодит нийгмийн нөхцөлд орохоос өмнө, ижил шийдвэрлэх мөчүүдийг аюулгүй виртуал орчинд хангалттай олон хувилбараар давтаж, бие даан дасан зохицож сурна.
+
+| Шат | Experience | Батлах зүйл |
+|---|---|---|
+| 1 | Text + voice + static image | Learning loop ба safety |
+| 2 | Ambient audio + branching POV clip | Immersion нэмэгдэхэд completion хадгалагдах эсэх |
+| 3 | Mobile 360° event recording | Presence нь real-life transfer-д нөлөөлөх эсэх |
+| 4 | VR headset interactive rehearsal | Харц, зай, бүлэг, тайзны дарамтыг graded байдлаар дасгах |
+| 5 | AI-generated interactive event world | Нэг skill дээр төгсгөлгүй controlled variants |
+
+Бүх шат нэг canonical contract ашиглана:
+
+`Scene → target skill → decision moments → characters → user response → reaction → feedback → variation`
+
+Event recording нь зөвшөөрөлтэй жүжигчид/оролцогч ашиглах, 6–8 интерактив decision moment болгон annotation хийх, нүүр/дуу/байгууллагын мэдээллийн usage scope ба retention-г бүртгэх, consent цуцлагдвал asset-ийг unpublish/delete хийх боломжтой байх шаардлагатай. Passive replay нь practice completion биш.
 
 ## 7. 7 өдрийн pilot journey
 
@@ -212,6 +251,43 @@ type SceneVariant = {
   friction: string;
   goal: string;
   difficulty: "guided" | "prompted" | "light_surprise";
+};
+
+type SkillMastery = {
+  userId: string;
+  targetSkillId: string;
+  stage:
+    | "introduced"
+    | "repeating"
+    | "stabilizing"
+    | "independent"
+    | "adapting"
+    | "consolidating";
+  recentVariantIds: string[];
+  independentSuccessCount: number;
+  hintUseCount: number;
+  safeFinishCount: number;
+  lastPracticedAt: string;
+};
+
+type DecisionMoment = {
+  id: string;
+  sceneId: string;
+  targetSkillId: string;
+  cueStartMs?: number;
+  cueEndMs?: number;
+  allowedResponseModes: ("voice" | "text" | "choice" | "gaze" | "gesture")[];
+  branches: string[];
+};
+
+type MediaAsset = {
+  id: string;
+  renderer: "text_voice" | "image_audio" | "pov_video" | "video_360" | "vr_interactive";
+  locale: string;
+  consentRecordId?: string;
+  usageRights: string;
+  retentionPolicy: string;
+  decisionMomentIds: string[];
 };
 
 type RealLifeBridge = {
@@ -288,8 +364,10 @@ Qualitative:
 - raw audio-г default хадгалах
 - manager-д individual response/reflection харуулах
 - open-ended AI-generated surprise
-- VR/avatar video
+- Pilot release дэх VR/avatar video implementation
 - эхний pilot-д user-generated video upload
+
+360°/VR нь pilot implementation scope-д орохгүй боловч data/content contract болон media renderer boundary-д урт хугацааны requirement хэлбэрээр орно.
 
 ## 12. Pilot acceptance criteria
 
@@ -303,3 +381,6 @@ Qualitative:
 - Refresh/network алдаанд session state сэргээнэ.
 - Raw audio хадгалахгүй; sensitive fields manager analytics-д гарахгүй.
 - Analytics нь repair, variation, safety, bridge funnel-ийг хэмжинэ.
+- Mastery progression нь нэг self-rating/LLM score-д тулгуурлахгүй; repeat/soften/progress/consolidate/pause decision тесттэй байна.
+- Нэг target skill 2–3 controlled variant болон өөр өдөрт дор хаяж нэг дахин баталгаажсаны дараа independent/adapting шат руу орно.
+- Scene contract нь renderer-agnostic байна; text/voice logic-ийг ирээдүйн 360°/VR-д зориулан дахин бичих шаардлагагүй.

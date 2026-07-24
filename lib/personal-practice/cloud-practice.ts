@@ -32,8 +32,9 @@ export async function syncPersonalPractice(
     target_skill_id: state.targetSkillId,
     current_stage: state.stage,
     state: {
-      attempt_count: state.attempts.length,
-      bridge_accepted: state.bridgeAccepted,
+        attempt_count: state.attempts.length,
+        bridge_accepted: state.bridgeAccepted,
+        surprise_opt_in: state.surpriseOptIn,
     },
   }, { onConflict: "id" });
   if (journeyError) return false;
@@ -59,6 +60,9 @@ export async function syncPersonalPractice(
     used_hint: attempt.usedHint,
     reflection: attempt.reflection || null,
     decision: attempt.decision,
+    renderer: attempt.variation.renderer,
+    media_asset_id: attempt.variation.renderer === "image_audio" ? "ideation-event-calm-v1" : null,
+    media_skipped: attempt.variation.renderer === "text_voice",
     completed_at: attempt.completedAt,
   }, { onConflict: "id" });
   return !error;
@@ -78,6 +82,7 @@ export async function syncBridgeChoice(userId: string, state: PersonalPracticeSt
     state: {
       attempt_count: state.attempts.length,
       bridge_accepted: accepted,
+      surprise_opt_in: state.surpriseOptIn,
     },
   }).eq("id", state.journeyId).eq("user_id", userId);
   return !error;

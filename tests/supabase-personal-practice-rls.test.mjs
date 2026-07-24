@@ -116,6 +116,49 @@ test("personal practice RLS isolates two authenticated users", {
     assert.ifError(ownerReadError);
     assert.equal(ownerStillSeesA.current_stage, "guided");
 
+    const { error: mediaAttemptError } = await clients[0]
+      .from("personal_practice_attempts")
+      .insert({
+        id: crypto.randomUUID(),
+        journey_id: journeyA,
+        user_id: users[0].id,
+        target_skill_id: targetSkillId,
+        variation_id: "rls-media-variant",
+        variation_seed: "rls-media-seed",
+        stage: "guided",
+        changed_dimensions: ["environment"],
+        anxiety_before: 4,
+        anxiety_after: 3,
+        completed: true,
+        safe_finished: false,
+        used_hint: false,
+        decision: "repeat",
+        renderer: "image_audio",
+        media_asset_id: "ideation-event-calm-v1",
+        media_skipped: false,
+      });
+    assert.ifError(mediaAttemptError);
+
+    const { error: routeInsertError } = await clients[0]
+      .from("today_practice_routes")
+      .insert({
+        user_id: users[0].id,
+        readiness: {
+          accumulatedIntensity: 6,
+          upcomingEvent: true,
+          availableEnergy: 5,
+        },
+        recommended_route: "past_repair",
+        selected_route: null,
+      });
+    assert.ifError(routeInsertError);
+    const { data: bReadsRoute, error: bReadsRouteError } = await clients[1]
+      .from("today_practice_routes")
+      .select("user_id")
+      .eq("user_id", users[0].id);
+    assert.ifError(bReadsRouteError);
+    assert.deepEqual(bReadsRoute, []);
+
     const { error: crossOwnerRepairError } = await clients[1]
       .from("past_event_repairs")
       .insert({

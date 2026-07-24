@@ -5,8 +5,11 @@ import {
   TARGET_SKILL_ID,
   createVariation,
   decideProgression,
+  safeStageForIntensity,
 } from "../lib/personal-practice/variation-engine.ts";
 import { mergeHydratedPersonalPractice } from "../lib/personal-practice/hydration.ts";
+import { isPastEventPilotEnabled, recommendTodayRoute } from "../lib/personal-practice/today-router.ts";
+import { ideationEventMedia, mediaAssetForIntensity } from "../lib/personal-practice/media-assets.ts";
 
 test("controlled variation is deterministic and changes at most two dimensions", () => {
   const first = createVariation("pilot-user-42", "prompted", 2);
@@ -15,6 +18,23 @@ test("controlled variation is deterministic and changes at most two dimensions",
   assert.equal(first.targetSkillId, TARGET_SKILL_ID);
   assert.ok(first.changedDimensions.length >= 1);
   assert.ok(first.changedDimensions.length <= 2);
+});
+
+test("renderer changes presentation without changing the decision moment or skill", () => {
+  const text = createVariation("renderer-seed", "guided", 0, "text_voice");
+  const media = createVariation("renderer-seed", "guided", 0, "image_audio");
+  assert.equal(text.targetSkillId, media.targetSkillId);
+  assert.deepEqual(text.decisionMoment, media.decisionMoment);
+  assert.equal(text.renderer, "text_voice");
+  assert.equal(media.renderer, "image_audio");
+});
+
+test("graded media metadata is explicit and high intensity falls back to text", () => {
+  assert.equal(ideationEventMedia.locale, "mn-MN");
+  assert.equal(ideationEventMedia.qaStatus, "approved");
+  assert.ok(ideationEventMedia.image.alt.length > 20);
+  assert.equal(mediaAssetForIntensity(8)?.id, "ideation-event-calm-v1");
+  assert.equal(mediaAssetForIntensity(9), null);
 });
 
 test("guided pilot exposes at least three deterministic variants", () => {
@@ -40,11 +60,99 @@ test("progression requires three stable attempts instead of one rating", () => {
     anxietyBefore: 5,
     anxietyAfter: 4,
   };
-  assert.equal(decideProgression([stable], "guided").decision, "repeat");
-  assert.deepEqual(decideProgression([stable, stable, stable], "guided"), {
+  assert.equal(decideProgression([{ ...stable, completedAt: "2026-07-23T10:00:00Z", variationId: "a" }], "guided").decision, "repeat");
+  assert.deepEqual(decideProgression([
+    { ...stable, completedAt: "2026-07-23T10:00:00Z", variationId: "a" },
+    { ...stable, completedAt: "2026-07-23T11:00:00Z", variationId: "b" },
+    { ...stable, completedAt: "2026-07-24T10:00:00Z", variationId: "c" },
+  ], "guided"), {
     decision: "progress",
     nextStage: "prompted",
   });
+});
+
+test("same-day repetition consolidates but does not progress mastery", () => {
+  const stable = {
+    stage: "guided",
+    completed: true,
+    safeFinished: false,
+    usedHint: false,
+    anxietyBefore: 5,
+    anxietyAfter: 4,
+  };
+  assert.deepEqual(decideProgression([
+    { ...stable, completedAt: "2026-07-24T09:00:00Z", variationId: "a" },
+    { ...stable, completedAt: "2026-07-24T10:00:00Z", variationId: "b" },
+    { ...stable, completedAt: "2026-07-24T11:00:00Z", variationId: "c" },
+  ], "guided"), { decision: "repeat", nextStage: "guided" });
+});
+
+test("safe finish pauses and high intensity blocks light surprise", () => {
+  const paused = decideProgression([{
+    stage: "prompted",
+    completed: false,
+    safeFinished: true,
+    usedHint: true,
+    anxietyBefore: 8,
+    anxietyAfter: 8,
+    completedAt: "2026-07-24T10:00:00Z",
+    variationId: "pause",
+  }], "prompted");
+  assert.deepEqual(paused, { decision: "pause", nextStage: "prompted" });
+  assert.equal(safeStageForIntensity("light-surprise", 8), "independent");
+});
+
+test("first stable attempt after progress is a consolidation", () => {
+  const result = decideProgression([
+    {
+      stage: "guided",
+      completed: true,
+      safeFinished: false,
+      usedHint: false,
+      anxietyBefore: 5,
+      anxietyAfter: 4,
+      decision: "progress",
+      completedAt: "2026-07-23T10:00:00Z",
+      variationId: "a",
+    },
+    {
+      stage: "prompted",
+      completed: true,
+      safeFinished: false,
+      usedHint: false,
+      anxietyBefore: 4,
+      anxietyAfter: 4,
+      completedAt: "2026-07-24T10:00:00Z",
+      variationId: "b",
+    },
+  ], "prompted");
+  assert.deepEqual(result, { decision: "consolidate", nextStage: "prompted" });
+});
+
+test("Today router deterministically selects repair, future, or daily", () => {
+  assert.equal(recommendTodayRoute({
+    accumulatedIntensity: 7,
+    upcomingEvent: true,
+    availableEnergy: 5,
+  }).route, "past_repair");
+  assert.equal(recommendTodayRoute({
+    accumulatedIntensity: 3,
+    upcomingEvent: true,
+    availableEnergy: 5,
+  }).route, "future_rehearsal");
+  assert.equal(recommendTodayRoute({
+    accumulatedIntensity: 3,
+    upcomingEvent: false,
+    availableEnergy: 2,
+  }).route, "daily_skill_loop");
+});
+
+test("feature flag can restore the existing Sprint 6 Today path", () => {
+  const previous = process.env.NEXT_PUBLIC_PAST_EVENT_PILOT;
+  process.env.NEXT_PUBLIC_PAST_EVENT_PILOT = "false";
+  assert.equal(isPastEventPilotEnabled(), false);
+  if (previous === undefined) delete process.env.NEXT_PUBLIC_PAST_EVENT_PILOT;
+  else process.env.NEXT_PUBLIC_PAST_EVENT_PILOT = previous;
 });
 
 test("two overloaded attempts soften without cloning the old exercise", () => {
@@ -96,6 +204,7 @@ test("cloud hydration restores stage, reflection, repair and bridge without resp
     repair: null,
     attempts: [],
     bridgeAccepted: null,
+    surpriseOptIn: false,
   };
   const hydrated = mergeHydratedPersonalPractice(local, {
     id: "cloud-journey",
@@ -115,6 +224,9 @@ test("cloud hydration restores stage, reflection, repair and bridge without resp
     reflection: "Тайван эхэлж чадсан.",
     decision: "progress",
     completed_at: "2026-07-24T10:00:00.000Z",
+    renderer: "image_audio",
+    media_asset_id: "ideation-event-calm-v1",
+    media_skipped: false,
   }], {
     moments: ["Санаа хэлэх мөч"],
     selected_moment: "Санаа хэлэх мөч",
@@ -124,6 +236,8 @@ test("cloud hydration restores stage, reflection, repair and bridge without resp
   assert.equal(hydrated.stage, "prompted");
   assert.equal(hydrated.attempts[0].reflection, "Тайван эхэлж чадсан.");
   assert.equal(hydrated.attempts[0].response, "");
+  assert.equal(hydrated.attempts[0].variation.renderer, "image_audio");
   assert.equal(hydrated.repair?.saveChoice, "cloud");
   assert.equal(hydrated.bridgeAccepted, true);
+  assert.equal(hydrated.surpriseOptIn, false);
 });

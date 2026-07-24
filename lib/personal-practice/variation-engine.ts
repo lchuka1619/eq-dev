@@ -14,6 +14,20 @@ export type VariationDimension =
   | "promptSupport"
   | "complication";
 
+export type SceneRenderer =
+  | "text_voice"
+  | "image_audio"
+  | "pov_video"
+  | "video_360"
+  | "vr_interactive";
+
+export type DecisionMoment = {
+  id: string;
+  targetSkillId: typeof TARGET_SKILL_ID;
+  goal: string;
+  successSignal: string;
+};
+
 export type Variation = {
   id: string;
   seed: string;
@@ -28,6 +42,8 @@ export type Variation = {
   openingLine: string;
   prompt: string;
   responseFrame: string;
+  renderer: SceneRenderer;
+  decisionMoment: DecisionMoment;
 };
 
 export type AttemptEvidence = {
@@ -37,9 +53,12 @@ export type AttemptEvidence = {
   usedHint: boolean;
   anxietyBefore: number;
   anxietyAfter: number;
+  completedAt?: string;
+  variationId?: string;
+  decision?: ProgressDecision;
 };
 
-export type ProgressDecision = "repeat" | "soften" | "progress";
+export type ProgressDecision = "repeat" | "soften" | "progress" | "consolidate" | "pause";
 
 const stages: RehearsalStage[] = [
   "guided",
@@ -50,15 +69,15 @@ const stages: RehearsalStage[] = [
 ];
 
 const pools = {
-  environment: ["бага хурлын өрөө", "эвентийн кофе завсарлага", "онлайн ideation уулзалт"],
-  character: ["танил хамтрагч", "өөр хэлтсийн оролцогч", "эвентийн чиглүүлэгч"],
+  environment: ["багийн ideation уулзалт", "эвентийн кофе завсарлага", "эвент рүү явах автобус"],
+  character: ["танил хамтрагч", "өөр хэлтсийн оролцогч", "хажууд суусан оролцогч"],
   tone: ["тайван, сонирхсон", "түргэн хэмнэлтэй", "бага зэрэг эргэлзсэн"],
   promptSupport: [
     "“Сонссоноо холбоод → санаагаа нэг өгүүлбэрээр → нэг асуулт”",
     "“Энэ санаатай холбоод би … гэж санал болгоё. Та юу гэж харж байна?”",
     "Зөвхөн эхний 3–5 үгээ урьдчилан сонго.",
   ],
-  complication: ["гэнэтийн зүйлгүй", "өөр хүн ижил санаа түрүүлж хэлэв", "чамаас жишээ асуув"],
+  complication: ["гэнэтийн зүйлгүй", "өөр хүн ижил санаа түрүүлж хэлэв", "бүтцийг нь товчлохыг хүсэв"],
 } satisfies Record<VariationDimension, string[]>;
 
 const base = {
@@ -90,7 +109,12 @@ function select<T>(items: readonly T[], state: number) {
   return { state: random.state, value: items[Math.floor(random.value * items.length)] };
 }
 
-export function createVariation(seed: string, stage: RehearsalStage, attemptIndex = 0): Variation {
+export function createVariation(
+  seed: string,
+  stage: RehearsalStage,
+  attemptIndex = 0,
+  renderer: SceneRenderer = "text_voice",
+): Variation {
   let state = hashSeed(`${seed}:${stage}:${attemptIndex}:${TARGET_SKILL_ID}`);
   const dimensions = Object.keys(pools) as VariationDimension[];
   const changeCount = stage === "guided" ? (attemptIndex === 0 ? 0 : 1) : attemptIndex % 3 === 2 ? 2 : 1;
@@ -127,12 +151,20 @@ export function createVariation(seed: string, stage: RehearsalStage, attemptInde
       ? "Ярианд тайван орж, нэг санаагаа богино хэлээрэй."
       : `${result.complication}. Ижил чадвараа ашиглан ярианд ороорой.`,
     responseFrame,
+    renderer,
+    decisionMoment: {
+      id: "join-idea-thread-v1",
+      targetSkillId: TARGET_SKILL_ID,
+      goal: "Өмнөх санаатай холбоод нэг тодорхой санал нэмэх",
+      successSignal: "Холбоос + нэг санаа + үргэлжлүүлэх орон зай",
+    },
   };
 }
 
 export function decideProgression(
   history: AttemptEvidence[],
   currentStage: RehearsalStage,
+  options: { allowSurprise?: boolean } = {},
 ): { decision: ProgressDecision; nextStage: RehearsalStage } {
   const recent = history.slice(-3);
   if (recent.length >= 2 && recent.slice(-2).every((item) =>
@@ -143,15 +175,67 @@ export function decideProgression(
       nextStage: stages[Math.max(0, stages.indexOf(currentStage) - 1)],
     };
   }
+  const latest = history.at(-1);
+  if (latest && (latest.safeFinished || latest.anxietyAfter >= 8)) {
+    return { decision: "pause", nextStage: currentStage };
+  }
+
+  const previous = history.at(-2);
+  const latestStable = latest &&
+    latest.completed &&
+    !latest.safeFinished &&
+    !latest.usedHint &&
+    latest.anxietyAfter <= latest.anxietyBefore + 1;
+  if (previous?.decision === "progress" && latestStable) {
+    return { decision: "consolidate", nextStage: currentStage };
+  }
 
   const stable = recent.length === 3 && recent.every((item) =>
     item.completed && !item.safeFinished && !item.usedHint && item.anxietyAfter <= item.anxietyBefore + 1
   );
-  if (stable) {
+  const distinctDates = new Set(recent.map((item) => item.completedAt?.slice(0, 10)).filter(Boolean));
+  const distinctVariants = new Set(recent.map((item) => item.variationId).filter(Boolean));
+  if (stable && distinctDates.size >= 2 && distinctVariants.size >= 2) {
+    const proposedStage = stages[Math.min(stages.length - 1, stages.indexOf(currentStage) + 1)];
+    const nextStage = proposedStage === "light-surprise" && (!options.allowSurprise || !canUseLightSurprise(history))
+      ? currentStage
+      : proposedStage;
     return {
-      decision: "progress",
-      nextStage: stages[Math.min(stages.length - 1, stages.indexOf(currentStage) + 1)],
+      decision: nextStage === currentStage ? "consolidate" : "progress",
+      nextStage,
     };
   }
   return { decision: "repeat", nextStage: currentStage };
+}
+
+export function canUseLightSurprise(history: AttemptEvidence[]) {
+  const recent = history.slice(-3);
+  if (recent.length < 3) return false;
+  return recent.every((item) =>
+    item.completed &&
+    !item.safeFinished &&
+    item.anxietyAfter < 8 &&
+    item.anxietyAfter <= item.anxietyBefore + 1
+  );
+}
+
+export function safeStageForIntensity(stage: RehearsalStage, intensity: number): RehearsalStage {
+  return stage === "light-surprise" && intensity >= 8 ? "independent" : stage;
+}
+
+export function evaluatePracticeResponse(response: string) {
+  const normalized = response.trim().toLocaleLowerCase("mn");
+  const hasConnection = ["холбоод", "таны хэлсэн", "энэ санаа", "нэмж"].some((phrase) => normalized.includes(phrase));
+  const hasQuestion = normalized.includes("?");
+  const concise = normalized.length <= 220;
+  return {
+    positive: hasConnection
+      ? "Өмнөх санаатай холбоод ярианд орсон нь ойлгомжтой боллоо."
+      : concise
+        ? "Санаагаа богино, сонсоход хялбар хэллээ."
+        : "Ярианд орж, санаагаа илэрхийлж чадлаа.",
+    improve: hasQuestion
+      ? "Одоо гол саналаа эхний өгүүлбэрт арай тодорхой байрлуулаарай."
+      : "Нөгөө хүнд үргэлжлүүлэх орон зай өгөх нэг богино асуулт нэмээрэй.",
+  };
 }

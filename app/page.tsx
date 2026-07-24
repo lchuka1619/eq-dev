@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/auth/account-menu";
 import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
 import { PersonalPracticePilot } from "@/components/personal-practice/personal-practice-pilot";
+import { TodayPracticeRouter } from "@/components/personal-practice/today-practice-router";
 import { useCloudProgress } from "@/lib/progress/cloud-progress";
 import { useLearningPlan } from "@/lib/plan/cloud-plan";
+import { isPastEventPilotEnabled } from "@/lib/personal-practice/today-router";
 import { todayKey } from "@/lib/plan/learning-plan";
 
 type VoicePhase = "ready" | "respond" | "feedback" | "retry" | "complete";
@@ -362,6 +364,7 @@ function IconClock() {
 }
 
 export default function Home() {
+  const pastEventPilotEnabled = isPastEventPilotEnabled();
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [practiceOpen, setPracticeOpen] = useState(false);
   const [practiceStep, setPracticeStep] = useState(0);
@@ -1193,7 +1196,14 @@ export default function Home() {
             тайван, үр дүнтэй болгоорой.
           </p>
 
-          <article className="featured-practice">
+          {pastEventPilotEnabled ? (
+            <TodayPracticeRouter
+              dailyMinutes={preferences?.dailyMinutes ?? 3}
+              completedDays={plan?.completions.length ?? 0}
+              streak={streak}
+              onDailyPractice={startTodayPractice}
+            />
+          ) : <article className="featured-practice">
             <div>
               <p className="card-kicker">{plan ? `ӨНӨӨДРИЙН ${preferences?.dailyMinutes ?? 3} МИНУТЫН ДАСГАЛ · ӨДӨР ${plan.currentDay}/7` : "ТАНЫ ХУВИЙН ДАСГАЛЫН ЗАМ"}</p>
               <h2>{todayPlanDay?.title ?? "7 өдрийн замаа эхлүүлэх"}</h2>
@@ -1211,7 +1221,7 @@ export default function Home() {
               </button>
               {plan && <button className="today-change" type="button" onClick={() => { chooseLesson((lessonIndex + 1) % microLessons.length); window.setTimeout(openVoiceCoach, 0); }}>Дасгалаа өөрчлөх</button>}
             </div>
-          </article>
+          </article>}
         </div>
 
         <aside className="streak-card" aria-label="Энэ долоо хоногийн ахиц">
@@ -1236,7 +1246,7 @@ export default function Home() {
         </aside>
       </section>
 
-      <PersonalPracticePilot />
+      {pastEventPilotEnabled && <PersonalPracticePilot />}
 
       <section className="arena-section" id="arena">
         <div className="section-shell">

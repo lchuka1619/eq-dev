@@ -1,11 +1,12 @@
 import type { PersonalAttempt, PersonalPracticeState, RepairDraft } from "./persistence.ts";
 import { createVariation, type RehearsalStage } from "./variation-engine.ts";
+import type { SceneRenderer } from "./variation-engine.ts";
 
 export type CloudJourney = {
   id: string;
   target_skill_id: string;
   current_stage: RehearsalStage;
-  state: { bridge_accepted?: boolean | null } | null;
+  state: { bridge_accepted?: boolean | null; surprise_opt_in?: boolean } | null;
 };
 
 export type CloudAttempt = {
@@ -21,6 +22,9 @@ export type CloudAttempt = {
   reflection: string | null;
   decision: PersonalAttempt["decision"];
   completed_at: string;
+  renderer?: SceneRenderer;
+  media_asset_id?: string | null;
+  media_skipped?: boolean;
 };
 
 export type CloudRepair = {
@@ -46,7 +50,7 @@ export function mergeHydratedPersonalPractice(
     anxietyBefore: item.anxiety_before,
     anxietyAfter: item.anxiety_after,
     variation: {
-      ...createVariation(item.variation_seed, item.stage, index),
+      ...createVariation(item.variation_seed, item.stage, index, item.renderer ?? "text_voice"),
       id: item.variation_id,
     },
     response: "",
@@ -72,5 +76,6 @@ export function mergeHydratedPersonalPractice(
     repair: cloudRepair,
     attempts: mergedAttempts,
     bridgeAccepted: journey.state?.bridge_accepted ?? local.bridgeAccepted,
+    surpriseOptIn: journey.state?.surprise_opt_in ?? local.surpriseOptIn ?? false,
   };
 }

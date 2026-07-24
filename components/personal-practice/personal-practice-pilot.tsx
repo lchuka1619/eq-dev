@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { MediaPreview } from "@/components/personal-practice/media-preview";
 import {
   deleteCloudRepair,
   hydratePersonalPractice,
@@ -20,10 +21,13 @@ import {
   TARGET_SKILL_ID,
   createVariation,
   decideProgression,
+  evaluatePracticeResponse,
+  safeStageForIntensity,
   type RehearsalStage,
+  type SceneRenderer,
 } from "@/lib/personal-practice/variation-engine";
 
-type Step = "intro" | "repair" | "practice" | "result";
+type Step = "intro" | "repair" | "media" | "practice" | "result";
 
 const stageLabels: Record<RehearsalStage, string> = {
   guided: "Guided",
@@ -53,11 +57,14 @@ export function PersonalPracticePilot() {
   const [reflection, setReflection] = useState("");
   const [usedHint, setUsedHint] = useState(false);
   const [safeFinished, setSafeFinished] = useState(false);
+  const [mediaMode, setMediaMode] = useState<Extract<SceneRenderer, "text_voice" | "image_audio">>("image_audio");
   const hydratedUser = useRef<string | null>(null);
+  const activeStage = safeStageForIntensity(state.stage, anxietyBefore);
   const variation = useMemo(
-    () => createVariation(state.journeyId, state.stage, state.attempts.length),
-    [state.attempts.length, state.journeyId, state.stage],
+    () => createVariation(state.journeyId, activeStage, state.attempts.length, mediaMode),
+    [activeStage, mediaMode, state.attempts.length, state.journeyId],
   );
+  const feedback = useMemo(() => evaluatePracticeResponse(response), [response]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -87,6 +94,15 @@ export function PersonalPracticePilot() {
       .catch(() => setSyncState("pending"));
   }, [ready, setSyncState, state, user]);
 
+  useEffect(() => {
+    const startFromToday = (event: Event) => {
+      const route = (event as CustomEvent<{ route?: string }>).detail?.route;
+      setStep(route === "past_repair" ? "repair" : "media");
+    };
+    window.addEventListener("eq:start-personal-practice", startFromToday);
+    return () => window.removeEventListener("eq:start-personal-practice", startFromToday);
+  }, []);
+
   const saveState = (next: PersonalPracticeState) => {
     setState(next);
     writePersonalPracticeState(next);
@@ -102,7 +118,7 @@ export function PersonalPracticePilot() {
     setRepair(nextRepair);
     const next = { ...state, repair: choice === "none" ? null : nextRepair };
     saveState(next);
-    setStep("practice");
+    setStep("media");
   };
 
   const deleteRepair = async () => {
@@ -117,15 +133,24 @@ export function PersonalPracticePilot() {
   };
 
   const finishAttempt = async (safe = false) => {
+    const completedAt = new Date().toISOString();
     const evidence = {
-      stage: state.stage,
+      stage: activeStage,
       completed: !safe && Boolean(response.trim()),
       safeFinished: safe,
       usedHint,
       anxietyBefore,
       anxietyAfter,
+      completedAt,
+      variationId: variation.id,
     };
-    const decision = decideProgression([...state.attempts, evidence], state.stage);
+    const history = state.attempts.map((item) => ({
+      ...item,
+      variationId: item.variation.id,
+    }));
+    const decision = decideProgression([...history, evidence], activeStage, {
+      allowSurprise: state.surpriseOptIn,
+    });
     const attempt = {
       ...evidence,
       id: crypto.randomUUID(),
@@ -133,7 +158,7 @@ export function PersonalPracticePilot() {
       response: response.trim(),
       reflection: reflection.trim(),
       decision: decision.decision,
-      completedAt: new Date().toISOString(),
+      completedAt,
     };
     const next = {
       ...state,
@@ -167,6 +192,10 @@ export function PersonalPracticePilot() {
       const ok = await syncBridgeChoice(user.id, next, accepted);
       setSyncState(ok ? "synced" : "pending");
     }
+  };
+
+  const setSurpriseOptIn = (accepted: boolean) => {
+    saveState({ ...state, surpriseOptIn: accepted });
   };
 
   if (!ready) return null;
@@ -222,7 +251,16 @@ export function PersonalPracticePilot() {
 
       {step === "practice" && (
         <article className="pilot-card rehearsal-card">
-          <div className="pilot-step"><b>2</b><span>{stageLabels[state.stage]} rehearsal<small>Чадвар: санаагаа тодорхой оруулах</small></span></div>
+          <div className="pilot-step"><b>3</b><span>{stageLabels[activeStage]} rehearsal<small>Чадвар: санаагаа тодорхой оруулах · {mediaMode === "image_audio" ? "image + optional audio" : "text-only"}</small></span></div>
+          {state.stage === "light-surprise" && activeStage !== state.stage && (
+            <p className="safe-recommendation">Түгшүүр 8–10 байгаа тул Light surprise-ийг түр хойшлуулж, Independent шатанд зөөлрүүллээ.</p>
+          )}
+          {state.stage === "independent" && (
+            <label className="surprise-opt-in">
+              <input type="checkbox" checked={state.surpriseOptIn} onChange={(event) => setSurpriseOptIn(event.target.checked)} />
+              Тогтвортой болсны дараа нэг хөнгөн гэнэтийн хувилбар туршихыг зөвшөөрөх
+            </label>
+          )}
           <div className="variation-meta">
             <span>{variation.environment}</span><span>{variation.character}</span><span>{variation.tone}</span>
           </div>
@@ -250,19 +288,46 @@ export function PersonalPracticePilot() {
         </article>
       )}
 
+      {step === "media" && (
+        <MediaPreview
+          intensity={anxietyBefore}
+          onBack={() => setStep(state.repair ? "repair" : "intro")}
+          onTextOnly={() => {
+            setMediaMode("text_voice");
+            setStep("practice");
+          }}
+          onContinue={() => {
+            setMediaMode("image_audio");
+            setStep("practice");
+          }}
+        />
+      )}
+
       {step === "result" && (
         <article className="pilot-card pilot-result" aria-live="polite">
           <span className="complete-mark">{safeFinished ? "Ⅱ" : "✓"}</span>
           <h3>{safeFinished ? "Энд зогссон нь зөв сонголт." : "Нэг утгатай давталт дууслаа."}</h3>
-          <p>{state.stage === "guided" ? "Ижил дэмжлэгтэй, өөр жижиг нөхцөлөөр давтана." : `Дараагийн шат: ${stageLabels[state.stage]}.`}</p>
+          <p>{state.attempts.at(-1)?.decision === "pause"
+            ? "Өнөөдөр энд амраад, дараа нь ижил эсвэл зөөлөн хувилбараас үргэлжлүүлнэ."
+            : state.attempts.at(-1)?.decision === "consolidate"
+              ? "Шинэ шатны чадвараа нэг танил хувилбараар тогтворжуулна."
+              : state.stage === "guided"
+                ? "Ижил дэмжлэгтэй, өөр жижиг нөхцөлөөр давтана."
+                : `Дараагийн шат: ${stageLabels[state.stage]}.`}</p>
+          {!safeFinished && (
+            <div className="pilot-feedback">
+              <div className="feedback-line good"><b>✓ Сайн болсон</b><p>{feedback.positive}</p></div>
+              <div className="feedback-line improve"><b>→ Нэг сайжруулалт</b><p>{feedback.improve}</p></div>
+            </div>
+          )}
           <div className="result-stats"><span><b>{state.attempts.length}</b> нийт оролдлого</span><span><b>{anxietyBefore} → {anxietyAfter}</b> түгшүүр</span><span><b>{variation.changedDimensions.length}</b> өөрчилсөн хувьсагч</span></div>
-          <div className="bridge-card">
+          {Math.max(anxietyBefore, anxietyAfter) < 8 && <div className="bridge-card">
             <p className="eyebrow">OPTIONAL REAL-LIFE BRIDGE</p>
             <h4>Дараагийн уулзалтаас өмнө эхний нэг өгүүлбэрээ notes-д бичих үү?</h4>
             <p>Хэнд ч илгээх шаардлагагүй. Алгассан ч streak болон ахиц буурахгүй.</p>
             <button type="button" className="secondary-button" onClick={() => void chooseBridge(true)}>Тийм, жижиг алхмыг сонгох</button>
             <button type="button" className="text-button" onClick={() => void chooseBridge(false)}>Одоохондоо алгасах</button>
-          </div>
+          </div>}
           <div className="pilot-actions">
             <button type="button" className="primary-button" onClick={repeat}>Өөр жижиг хувилбараар давтах</button>
             <button type="button" className="text-button" onClick={() => setStep("intro")}>Дуусгах</button>

@@ -1,7 +1,8 @@
 # EQ Dev — Дэлгэц ба хэрэглэгчийн урсгалын төлөвлөгөө v0.1
 
-**Огноо:** 2026-07-24
-**Бүтээгдэхүүний ангилал:** Human Skills Simulation Coach
+**Огноо:** 2026-07-24  
+**Сүүлийн шинэчлэлт:** 2026-07-24 — flow router, mastery loop, event recording/360°/VR vision  
+**Бүтээгдэхүүний ангилал:** Human Skills Simulation Coach  
 **Үндсэн амлалт:** Хэрэглэгч зайлсхийж буй яриагаа аюулгүй орчинд богино хугацаагаар давтаж, сэтгэл хөдлөлөө зохицуулан, бодит амьдралд хэлэх үгээ бэлтгэнэ.
 
 ---
@@ -316,6 +317,53 @@ Scenario бүр `content_language`, `locale`, `voice_support`, `cultural_variant
 
 Variation нь орчин, дүр, opening line, жижиг саад, зорилго, difficulty-г хяналттай сольж болно. Нэг session дотор нэгээс олон гол чадвар зэрэг үнэлэхгүй.
 
+### Flow 14 — Хэрэглэгчийг зөв дасгалын зам руу оруулах
+
+`Today → 1 богино readiness асуулт → Flow router → Past Repair / Future Rehearsal / Daily Skill Loop`
+
+Router нь оношлохгүй. Хэрэглэгчид дараах 3 замын нэгийг тайлбартай санал болгоно:
+
+| Дохио | Санал болгох зам | Яагаад |
+|---|---|---|
+| Өмнөх ижил эвентийн дурсамж одоо хүчтэй саад болж байна | Past Event Repair | Нэг хүнд мөчийг задлаад шинэ response давтах |
+| Ойрын бодит эвент тодорхой байна | Future Event Rehearsal | Тэр эвентийн гол 1–3 мөчийг урьдчилан бэлтгэх |
+| Тодорхой эвентгүй, нэг чадвараа сайжруулах хүсэлтэй | Daily Skill Loop | Нэг чадварыг бага өөрчлөлттэй тогтворжуулах |
+
+Хэрэглэгч recommendation-ийг солих, Past Repair-ийг алгасах эрхтэй. Today дээр гурван ижил primary CTA харуулахгүй; нэг recommended CTA, нэг “Өөр дасгал сонгох” холбоос байна.
+
+### Flow 15 — Mastery loop: давтах, зөөлрүүлэх, шат ахих
+
+`Variant → Өөрийн хариулт → Micro-feedback → Stability check → Repeat / Soften / Progress → Дараагийн variant`
+
+Шат ахилтыг зөвхөн session дууссан тоо эсвэл нэг self-rating-аар шийдэхгүй. Дараах дохиог хамтад нь хэрэглэнэ:
+
+- 2–3 өөр variant дээр target skill-ийн гол үйлдлийг хийсэн эсэх;
+- hint/recovery-ийн хэрэгцээ буурсан эсэх;
+- хэрэглэгчийн difficulty ба confidence үнэлгээ;
+- safe finish эсвэл abrupt quit гарсан эсэх;
+- хамгийн сүүлийн амжилт өөр өдөр дахин батлагдсан эсэх.
+
+Эхний heuristic:
+
+- **Repeat:** чадвар зөв боловч тогтворжоогүй — ижил difficulty, 1 жижиг өөрчлөлт;
+- **Soften:** хэт хүнд — support нэмэх эсвэл нэг хувьсагчийг зөөлрүүлэх;
+- **Progress:** 2–3 variant дээр тогтвортой — support багасгах эсвэл зөвхөн 1 шинэ complication;
+- **Consolidate:** шат ахисны дараа дахин нэг танил variant;
+- **Pause:** intensity өндөр — progression хийхгүй, safe finish санал болгох.
+
+Контентын харьцааг эхний туршилтад **70% танил бүтэц / 20% жижиг өөрчлөлт / 10% хөнгөн surprise** гэж авч үзнэ. Энэ нь хатуу хувь биш; analytics-аар тохируулна.
+
+### Flow 16 — Event recording-аас VR social flight simulator хүртэл
+
+`Curated text/voice scene → Static image + ambient audio → Branching POV clip → 360° event recording → VR interactive rehearsal → AI-generated interactive event world`
+
+VR нь тусдаа learning logic биш. Өнөөдрийн ижил `scene → target skill → decision moment → user response → character reaction → feedback → variation` contract-ийг өөр media renderer-ээр ажиллуулна.
+
+- Эвентийн бичлэгийг бүтнээр нь идэвхгүй үзүүлэхгүй; 6–8 decision moment болгон хуваана.
+- Нэг чадварыг хадгалж, дүр/үг/дуу чимээ/хүмүүсийн тооноос 1–2-ыг л өөрчилнө.
+- Pause, exit, intensity down, text/2D fallback үргэлж байна.
+- Бодит хүмүүсийн дүрс, дуу, байгууллагын мэдээлэлд explicit consent, usage rights, retention policy шаардана.
+
 ---
 
 ## 8. Role ба permission matrix
@@ -395,6 +443,18 @@ Past-event journey-ийн нэмэлт state:
 
 `experience_check → moments_mapped → moment_selected → meaning_separated → repair_practiced → varied_rehearsal → bridge_offered`
 
+Flow router state:
+
+`readiness_checked → route_recommended → route_confirmed`
+
+Mastery state:
+
+`introduced → repeating → stabilizing → independent → adapting → consolidating`
+
+Media renderer:
+
+`text_voice | image_audio | pov_video | video_360 | vr_interactive`
+
 ---
 
 ## 11. MVP screen cut — дараагийн build-д яг юу орох вэ
@@ -465,6 +525,8 @@ B2B pilot-д нэмэх хамгийн бага manager set:
 - Guided / Prompted / Light surprise гурван түвшин
 - Before/after intensity, safe-finish, variation usefulness хэмжих
 - Optional real-life bridge ба бодит амьдралын үр дүнгийн reflection
+- Today flow router: Past Repair / Future Rehearsal / Daily Skill Loop
+- Mastery decision: repeat / soften / progress / consolidate
 
 ### Phase C — 14 өдрийн Real Estate pilot
 
@@ -493,6 +555,14 @@ B2B pilot-д нэмэх хамгийн бага manager set:
 - Partner content workflow
 - Role/permission
 - Organization/license management
+
+### Phase G — Immersive social flight simulator R&D
+
+- Зөвшөөрөлтэй жүжигчилсэн эвентийн branching POV prototype
+- Утсаар үздэг 360° бичлэг дээр decision moments турших
+- 2D ба 360° хувилбарын completion, intensity, transfer-to-real-life үр дүнг харьцуулах
+- Үр дүн батлагдсаны дараа VR headset prototype
+- Scene logic-ийг media renderer-ээс салангид хэвээр хадгалах
 
 ---
 
@@ -548,3 +618,6 @@ Safety/quality events:
 11. Олон хүнтэй орчноос зайлсхийхийг тогтсон зан чанар гэж шууд ангилахгүй; олон жилийн хуримтлагдсан таагүй туршлага ба зайлсхийлтийн мөчлөг байж болохыг journey model-д тусгана.
 12. Бүтээгдэхүүний ялгарах хөдөлгүүр нь **Past-event repair → controlled variation → multimedia graded rehearsal → optional real-life bridge** байна.
 13. Дараагийн implementation priority нь manager workspace биш, нэг Personal Practice journey-ээр энэ хөдөлгүүрийн хэрэглэгчийн үнэ цэнэ ба аюулгүй байдлыг батлах явдал байна.
+14. Today нь Past Repair, Future Rehearsal, Daily Skill Loop-ийн нэгийг readiness дээр тулгуурлан санал болгоно.
+15. Progress нь completion count биш, олон variant ба олон өдөрт тогтвортой болсон target skill-ээр хэмжигдэнэ.
+16. Урт хугацааны алсын хараа нь зөвшөөрөлтэй event recording, 360° video, VR ашигласан **social flight simulator**; эхлээд learning engine ба real-life transfer-ийг mobile дээр батална.

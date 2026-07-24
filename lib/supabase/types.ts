@@ -52,3 +52,22 @@ export type PastEventRepairRow = {
   fact_text: string | null;
   conclusion_text: string | null;
 };
+
+export type TodayPracticeRouteRow = {
+  user_id: string;
+  readiness: {
+    accumulatedIntensity: number;
+    upcomingEvent: boolean;
+    availableEnergy: number;
+  };
+  recommended_route: "past_repair" | "future_rehearsal" | "daily_skill_loop";
+  selected_route: "past_repair" | "future_rehearsal" | "daily_skill_loop" | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PersonalPracticeAttemptMedia = {
+  renderer: "text_voice" | "image_audio" | "pov_video" | "video_360" | "vr_interactive";
+  media_asset_id: string | null;
+  media_skipped: boolean;
+};

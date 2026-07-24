@@ -1,45 +1,28 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import test from "node:test";
 import { chromium } from "playwright-core";
+import { createServer } from "vite";
 
-const port = 3017;
-const baseUrl = `http://127.0.0.1:${port}`;
 const chromePath = process.platform === "win32"
   ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
   : "/usr/bin/google-chrome";
 
-async function waitForServer(url, timeoutMs = 20_000) {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) return;
-    } catch {
-      // Server is still starting.
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error(`Production server did not start within ${timeoutMs}ms`);
-}
-
-test("three stable Guided repetitions progress the UI to Prompted on mobile", {
-  timeout: 60_000,
+test("three stable Guided repetitions across dates progress the UI to Prompted on mobile", {
+  timeout: 90_000,
 }, async () => {
-  const server = spawn(process.execPath, [
-    "node_modules/vite/bin/vite.js",
-    "--host",
-    "127.0.0.1",
-    "--port",
-    String(port),
-  ], {
-    cwd: process.cwd(),
-    env: process.env,
-    stdio: "ignore",
+  const server = await createServer({
+    server: {
+      host: "127.0.0.1",
+      port: 0,
+      strictPort: false,
+    },
   });
   let browser;
   try {
-    await waitForServer(baseUrl);
+    await server.listen();
+    const address = server.httpServer?.address();
+    assert.ok(address && typeof address === "object");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
     browser = await chromium.launch({
       executablePath: chromePath,
       headless: true,
@@ -47,28 +30,67 @@ test("three stable Guided repetitions progress the UI to Prompted on mobile", {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await page.addInitScript(() => {
       localStorage.setItem("hariltsaa-onboarding-skipped-v1", "1");
+      localStorage.setItem("eq-today-practice-router-v1", JSON.stringify({
+        readiness: {
+          accumulatedIntensity: 7,
+          upcomingEvent: true,
+          availableEnergy: 5,
+        },
+        selectedRoute: "past_repair",
+      }));
       localStorage.setItem("eq-personal-practice-pilot-v1", JSON.stringify({
         journeyId: "00000000-0000-4000-8000-000000000017",
         targetSkillId: "idea-entry.clear-contribution.v1",
         stage: "guided",
         repair: null,
-        attempts: [],
+        attempts: [
+          {
+            id: "prior-a",
+            stage: "guided",
+            completed: true,
+            safeFinished: false,
+            usedHint: false,
+            anxietyBefore: 5,
+            anxietyAfter: 4,
+            variation: { id: "prior-variant-a" },
+            response: "",
+            reflection: "",
+            decision: "repeat",
+            completedAt: "2026-07-22T10:00:00.000Z",
+          },
+          {
+            id: "prior-b",
+            stage: "guided",
+            completed: true,
+            safeFinished: false,
+            usedHint: false,
+            anxietyBefore: 5,
+            anxietyAfter: 4,
+            variation: { id: "prior-variant-b" },
+            response: "",
+            reflection: "",
+            decision: "repeat",
+            completedAt: "2026-07-23T10:00:00.000Z",
+          },
+        ],
         bridgeAccepted: null,
+        surpriseOptIn: false,
       }));
     });
     await page.goto(baseUrl, { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Pilot дасгал эхлэх" }).click();
+    await page.getByRole("heading", { name: "Нэг өмнөх мөчийг аюулгүй засварлах" }).waitFor();
+    await page.getByRole("button", { name: "Past Event Repair эхлэх" }).click();
     await page.getByRole("button", { name: "Алгасаад үргэлжлүүлэх" }).click();
+    await page.getByRole("img", { name: /Тайван хурлын өрөөнд/ }).waitFor();
+    await page.getByRole("button", { name: "Орчны дууг сонсох" }).waitFor();
+    await page.getByRole("button", { name: "Энэ нөхцөлөөр үргэлжлүүлэх" }).click();
 
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      await page.getByLabel("Таны хэлэх хариулт").fill(
-        `Таны хэлсэнтэй холбоод ${attempt}-р санаа нэмье. Эхлээд жижиг туршилт хийж болох уу?`,
-      );
-      await page.getByRole("button", { name: "Давталтыг дуусгах" }).click();
-      if (attempt < 3) {
-        await page.getByRole("button", { name: "Өөр жижиг хувилбараар давтах" }).click();
-      }
-    }
+    await page.getByLabel("Таны хэлэх хариулт").fill(
+      "Таны хэлсэнтэй холбоод нэг санаа нэмье. Эхлээд жижиг туршилт хийж болох уу?",
+    );
+    await page.getByRole("button", { name: "Давталтыг дуусгах" }).click();
+    await page.getByText("Сайн болсон").waitFor();
+    await page.getByText("Нэг сайжруулалт").waitFor();
 
     await assert.doesNotReject(() =>
       page.getByText("Дараагийн шат: Prompted.").waitFor({ state: "visible" }),
@@ -89,6 +111,6 @@ test("three stable Guided repetitions progress the UI to Prompted on mobile", {
     assert.equal(layout.pilotLabel, "personal-pilot-title");
   } finally {
     await browser?.close();
-    server.kill();
+    await server.close();
   }
 });

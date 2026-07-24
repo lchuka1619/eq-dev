@@ -1,19 +1,7 @@
 # Codex Implementation Plan — Past Event Repair + Varied Simulation
 
-## Repository architecture adaptation — 2026-07-24
-
-Энэ plan-ийг EQ Dev-ийн одоогийн Sprint 6 кодод дараах байдлаар тааруулна:
-
-- Personal Practice vertical slice-ийг одоогийн monolithic `app/page.tsx` дотор том rewrite хийхгүйгээр тусдаа `components/personal-practice/` feature component болгон холбоно.
-- Existing React state + localStorage + Supabase local-first загварыг хадгална; шинэ state management dependency нэмэхгүй.
-- Existing `practice_sessions` болон 7-day completion semantics-ийг өөрчлөхгүй. Pilot attempt нь тусдаа idempotent record байна; нэг өдөр олон удаа давтсан ч plan day/streak нэмэгдэхгүй.
-- Past Event Repair draft нь default-аар local-only. `past_event_repairs` table-д зөвхөн хэрэглэгч “Cloud-д хадгалах” сонголтыг ил тод хийсэн үед бичнэ.
-- Variation engine нь pure, seeded TypeScript module байна. Нэг attempt-д хамгийн ихдээ хоёр dimension өөрчилж, target skill ID-г тогтвортой хадгална.
-- AI endpoint нь feedback enhancement хэвээр; scenario-ийн үндсэн content deterministic static fallback тул `/api/coach` доголдсон ч pilot тасрахгүй.
-- Эхний slice-д Guided ба Prompted architecture/variants, before/after anxiety, reflection, optional bridge орно. Independent, Light surprise, Connected rehearsal stage ID болон progression-д тооцогдох боловч том multimedia/video UI deferred.
-- Энэ pass Personal Practice-only. Team Manager, Partner Admin, manager analytics, multimedia authoring scope-д орохгүй.
-
-**Огноо:** 2026-07-24
+**Огноо:** 2026-07-24  
+**Сүүлийн шинэчлэлт:** 2026-07-24 — flow router, mastery engine, immersive-ready contract  
 **Зорилго:** Одоогийн Sprint 6-ийн 7 өдрийн хувийн замыг эвдэхгүйгээр нэг “Байгууллагын эвентэд тайван оролцох” pilot journey дээр Past Event Repair, controlled variation, graded media, optional real-life bridge-г ажиллуулах.
 
 ## 0. Codex-д өгөх үндсэн заавар
@@ -67,6 +55,11 @@ NEXT_PUBLIC_PAST_EVENT_PILOT=true
    - difficulty нэг алхмаас илүү өсөхгүй;
    - intensity ≥ 8 бол `light_surprise` хориглоно.
 4. JSON/schema validation ба local fallback нэмэх.
+5. Renderer-agnostic scene contract:
+   - scene logic-ийг text/voice UI-тай хатуу холбохгүй;
+   - `DecisionMoment` ба `MediaAsset.renderer` metadata нэмэх;
+   - pilot-д зөвхөн `text_voice`, `image_audio` ажиллана;
+   - `pov_video`, `video_360`, `vr_interactive` enum/contract-аас цааш хэрэгжүүлэхгүй.
 
 ### Санал болгох бүтэц
 
@@ -87,6 +80,7 @@ Repo-ийн бодит convention өөр бол түүнд нийцүүл.
 - Immediate duplicate үүсэхгүй.
 - Intensity 8–10 → surprise үүсэхгүй.
 - Invalid AI/content JSON → local fallback.
+- Ижил scene contract `text_voice` ба `image_audio` renderer дээр target skill/decision moment-оо хадгална.
 
 ### Done
 
@@ -161,6 +155,43 @@ Repo-ийн бодит convention өөр бол түүнд нийцүүл.
 - Level down хийвэл scene context хадгалагдана.
 - AI unavailable үед curated character line ба feedback fallback ажиллана.
 
+### Mastery engine
+
+- `SkillMastery` persistence нэмэх.
+- `repeat | soften | progress | consolidate | pause` deterministic decision function хийх.
+- Нэг self-rating эсвэл LLM score дангаараа progression үүсгэхгүй.
+- Сүүлийн 3 variant, hint/recovery usage, intensity, safe finish, өөр өдрийн баталгааг ашиглах.
+- Нэг variant тутам хамгийн ихдээ 1–2 slot өөрчлөх.
+- Шат ахисны дараа consolidation variant өгөх.
+- Completion/streak logic-оос mastery-г тусгаарлах.
+
+### Mastery tests
+
+- Нэг амжилт → шууд progress хийхгүй.
+- 2–3 өөр variant дээр тогтвортой, support багассан → progress.
+- High intensity эсвэл safe finish → pause/soften, surprise үгүй.
+- Progress-ийн дараа → consolidate.
+- Repeat session нь streak/day progress-ийг хиймлээр нэмэхгүй.
+
+## 4A. Sprint 7C.1 — Today flow router
+
+### Ажил
+
+- Today эхлэхэд optional нэг readiness check.
+- Deterministic recommendation:
+  - хүчтэй өмнөх дурсамж → `past_repair`;
+  - ойрын тодорхой эвент → `future_rehearsal`;
+  - бусад → `daily_skill_loop`.
+- Нэг primary CTA + “Өөр дасгал сонгох”.
+- Recommendation reason харуулах.
+- Override хадгалах боловч хэрэглэгчид онош/label өгөхгүй.
+
+### Tests
+
+- Past Repair skip хийвэл future rehearsal руу орно.
+- Router нь гурван ижил primary CTA үүсгэхгүй.
+- Existing Sprint 6 хэрэглэгчийн Today path feature flag off үед өөрчлөгдөхгүй.
+
 ## 5. Sprint 7D — Graded media
 
 ### MVP scope
@@ -189,6 +220,7 @@ Repo-ийн бодит convention өөр бол түүнд нийцүүл.
 - POV video upload/streaming.
 - User-owned event photo upload.
 - Automatic face/person generation.
+- 360° video болон VR runtime.
 
 ### Done
 
@@ -217,6 +249,24 @@ Repo-ийн бодит convention өөр бол түүнд нийцүүл.
 - Bridge skip streak-д нөлөөлөхгүй.
 - Day 7 нь бүх scene-г дэлгэрэнгүй давтахгүй, гол шийдвэрүүдээр явна.
 
+## 6A. Post-pilot R&D — Event recording → 360° → VR
+
+Энэ хэсгийг Personal Pilot learning/safety metric батлагдсаны дараа л эхлүүлнэ.
+
+1. Зөвшөөрөлтэй жүжигчилсэн эвентийн 5–15 секундийн branching POV prototype.
+2. Ижил `DecisionMoment` contract-тай mobile 360° prototype.
+3. 2D vs 360° дээр completion, safe finish, intensity change, real-life reflection харьцуулах.
+4. Нэмэлт үнэ цэнэ батлагдвал VR headset prototype.
+
+Guardrails:
+
+- explicit participant consent ба usage rights;
+- face/voice/organization privacy;
+- asset unpublish/delete lifecycle;
+- autoplay үгүй;
+- pause/exit/intensity down/2D fallback;
+- passive video watching-ийг practice completion гэж тооцохгүй.
+
 ## 7. Analytics ба privacy
 
 ### Events
@@ -228,6 +278,10 @@ fact_conclusion_completed
 repair_rehearsal_completed
 variation_started
 variation_completed
+mastery_decision_made
+mastery_stage_changed
+flow_route_recommended
+flow_route_overridden
 media_level_changed
 bridge_offered
 bridge_accepted
@@ -243,6 +297,8 @@ Allowed:
 
 - journey/scene/variant id
 - target skill
+- mastery stage, progression decision
+- recommended/selected flow route
 - difficulty
 - intensity bucket (exact утга шаардлагагүй бол bucket)
 - completion/safety action
@@ -293,12 +349,15 @@ Forbidden:
 2. Content contracts + tests.
 3. Past Event Repair vertical slice.
 4. Controlled variation.
-5. Static image + optional ambient audio.
-6. Real-life bridge + Day 7 connected rehearsal.
-7. Analytics/privacy verification.
-8. Full build/typecheck/lint/test.
-9. Manual mobile QA checklist.
-10. Feature-flagged preview deploy only after user explicitly requests deployment.
+5. Today flow router + mastery engine.
+6. Static image + optional ambient audio.
+7. Real-life bridge + Day 7 connected rehearsal.
+8. Analytics/privacy verification.
+9. Full build/typecheck/lint/test.
+10. Manual mobile QA checklist.
+11. Feature-flagged preview deploy only after user explicitly requests deployment.
+
+POV/360°/VR R&D нь дээрх pilot дууссан гэж тооцох шалгуур биш.
 
 ## 11. Final verification command set
 
