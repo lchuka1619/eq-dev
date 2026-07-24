@@ -287,6 +287,11 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
       await navLink.click();
       await page.waitForURL(`${baseUrl}${destination.path}`);
       await page.getByRole("heading", { name: destination.heading }).waitFor();
+      if (destination.path === "/progress") {
+        await page.getByRole("heading", { name: "Ярианд тайван нэгдэж, нэг тодорхой санаа нэмэх" }).waitFor();
+        await page.getByText("өөр өдөр баталгаажсан").waitFor();
+        await page.getByText("XP болон session-ийн тоо нь mastery-г дангаараа тодорхойлохгүй.").waitFor();
+      }
       assert.equal(await navLink.getAttribute("aria-current"), "page");
     }
 

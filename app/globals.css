@@ -449,6 +449,25 @@ textarea { width: 100%; resize: vertical; padding: 14px 16px; margin-bottom: 18p
 .scenario-meta svg:last-child { margin-left: auto; }
 
 .progress-section { display: grid; grid-template-columns: .8fr 1.2fr; gap: 60px 80px; align-items: end; }
+.mastery-progress-card { grid-column: 1 / -1; padding: 28px; border: 1px solid #d8e4df; border-radius: 24px; background: linear-gradient(145deg, #f6fbf8, #fffdf8); box-shadow: 0 18px 50px rgba(17, 63, 57, .08); }
+.mastery-progress-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.mastery-progress-head span, .mastery-next span { color: #39776d; font-size: 12px; font-weight: 800; letter-spacing: .14em; }
+.mastery-progress-head h3 { margin: 7px 0 0; max-width: 650px; font-size: clamp(22px, 3vw, 34px); color: #173c37; }
+.mastery-progress-head > strong { padding: 8px 13px; border-radius: 999px; background: #dceee7; color: #19584f; white-space: nowrap; }
+.mastery-evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 24px 0 16px; }
+.mastery-evidence p { display: flex; align-items: center; gap: 12px; margin: 0; padding: 15px; border-radius: 14px; background: #fff; }
+.mastery-evidence b { font-size: 24px; color: #19584f; }
+.mastery-evidence span { color: #48645f; }
+.mastery-criteria { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.mastery-criteria li { display: flex; gap: 11px; align-items: center; min-height: 74px; padding: 13px; border: 1px solid #e5e7df; border-radius: 14px; background: #fff; }
+.mastery-criteria i { display: grid; place-items: center; flex: 0 0 30px; height: 30px; border-radius: 50%; background: #f0eee7; color: #776f61; font-style: normal; font-weight: 800; }
+.mastery-criteria li.stable i { background: #dceee7; color: #19584f; }
+.mastery-criteria span { display: grid; gap: 3px; }
+.mastery-criteria small { color: #70807d; }
+.mastery-next { margin-top: 16px; padding: 17px; border-left: 4px solid #e68d70; border-radius: 4px 14px 14px 4px; background: #fff5ee; }
+.mastery-next p { margin: 6px 0 10px; color: #503d35; }
+.mastery-next a { color: #19584f; font-weight: 800; }
+.mastery-disclaimer { display: block; margin-top: 14px; color: #71807d; }
 .progress-copy > p:last-child { margin-top: 22px; }
 .progress-stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: 22px; background: #fff; box-shadow: var(--shadow); }
 .progress-stats div { padding: 28px 20px; text-align: center; }
@@ -887,6 +906,10 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
   .focused-practice-nav + .practice-experience .practice-section,
   .focused-practice-nav + .practice-experience .roleplay-section { padding-top: 22px; }
   .practice-view-progress .progress-section { padding-top: 46px; padding-bottom: 40px; }
+  .mastery-progress-card { padding: 20px; border-radius: 19px; }
+  .mastery-progress-head { align-items: stretch; flex-direction: column; }
+  .mastery-progress-head > strong { align-self: flex-start; }
+  .mastery-evidence, .mastery-criteria { grid-template-columns: 1fr; }
   .app-footer { display: none; }
 }
 .connected-session blockquote { background: #eef4f0; border-radius: 18px; color: #24453e; font-size: 18px; margin: 12px 0 22px; padding: 20px; }

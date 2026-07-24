@@ -18,8 +18,10 @@ import {
   criterionImproved,
   evaluatePracticeResponse,
 } from "../lib/context-to-mastery/skill-rubric.ts";
+import { buildMasterySummary } from "../lib/context-to-mastery/mastery-summary.ts";
 import {
   TARGET_SKILL_ID,
+  canUseLightSurprise,
   createVariation,
   decideProgression,
   safeStageForIntensity,
@@ -339,6 +341,83 @@ test("completion without valid rubric evidence cannot advance mastery", () => {
     { ...invalid, completedAt: "2026-07-23T10:00:00Z", variationId: "b" },
     { ...invalid, completedAt: "2026-07-24T10:00:00Z", variationId: "c" },
   ], "guided"), { decision: "repeat", nextStage: "guided" });
+});
+
+test("Light Surprise requires two distinct Prompted variants and recent safety", () => {
+  const usable = {
+    stage: "prompted",
+    completed: true,
+    validAttempt: true,
+    demonstratedCriteria: 2,
+    safeFinished: false,
+    usedHint: false,
+    anxietyBefore: 5,
+    anxietyAfter: 4,
+  };
+  assert.equal(canUseLightSurprise([
+    { ...usable, variationId: "prompted-a" },
+    { ...usable, variationId: "prompted-a" },
+  ]), false);
+  assert.equal(canUseLightSurprise([
+    { ...usable, variationId: "prompted-a" },
+    { ...usable, variationId: "prompted-b" },
+  ]), true);
+  assert.equal(canUseLightSurprise([
+    { ...usable, variationId: "prompted-a" },
+    { ...usable, variationId: "prompted-b" },
+    { ...usable, stage: "independent", variationId: "overload", anxietyAfter: 9 },
+  ]), false);
+});
+
+test("mastery summary explains variants, criteria, and later-day confirmation without duplicate inflation", () => {
+  const evaluation = evaluatePracticeResponse(
+    "Таны хэлсэнтэй холбоод нэг жижиг туршилт хийе. Та юу гэж бодож байна?",
+  );
+  const attempt = (id, variantIndex, completedAt) => ({
+    id,
+    stage: "prompted",
+    completed: true,
+    validAttempt: true,
+    demonstratedCriteria: 3,
+    safeFinished: false,
+    usedHint: false,
+    anxietyBefore: 5,
+    anxietyAfter: 4,
+    variation: createVariation("mastery-seed", "prompted", variantIndex),
+    response: "",
+    reflection: "",
+    decision: "repeat",
+    completedAt,
+    evaluation,
+  });
+  const first = attempt("attempt-a", 0, "2026-07-23T10:00:00.000Z");
+  const second = attempt("attempt-b", 1, "2026-07-24T10:00:00.000Z");
+  const summary = buildMasterySummary({
+    journeyId: "journey",
+    targetSkillId: TARGET_SKILL_ID,
+    stage: "independent",
+    context: null,
+    repair: null,
+    attempts: [first, first, second],
+    bridgeAccepted: null,
+    bridge: {
+      id: "bridge",
+      status: "none",
+      offeredAt: null,
+      respondedAt: null,
+      didIt: null,
+      intensityBefore: null,
+      intensityAfter: null,
+      reflection: "",
+    },
+    surpriseOptIn: false,
+  });
+
+  assert.equal(summary.usableAttemptCount, 2);
+  assert.equal(summary.distinctVariantCount, 2);
+  assert.equal(summary.confirmedAcrossDays, true);
+  assert.ok(summary.criteria.every((criterion) => criterion.stable));
+  assert.match(summary.nextRecommendation, /Light Surprise/);
 });
 
 test("Today router deterministically selects repair, future, or daily", () => {

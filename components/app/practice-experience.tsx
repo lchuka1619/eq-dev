@@ -14,6 +14,12 @@ import {
   writeActivePractice,
   type ActivePractice,
 } from "@/lib/practice/active-practice";
+import { readPersonalPracticeState } from "@/lib/personal-practice/persistence";
+import { TARGET_SKILL_ID } from "@/lib/personal-practice/variation-engine";
+import {
+  buildMasterySummary,
+  type MasterySummary,
+} from "@/lib/context-to-mastery/mastery-summary";
 
 type VoicePhase = "ready" | "respond" | "feedback" | "retry" | "complete";
 type ArenaPhase = "idle" | "checkin" | "brief" | "scene" | "complete";
@@ -351,6 +357,16 @@ function calculateStreak(dates: string[]) {
   return streak;
 }
 
+function stageLabel(stage: MasterySummary["supportLevel"]) {
+  return {
+    guided: "Guided",
+    prompted: "Prompted",
+    independent: "Independent",
+    "light-surprise": "Light Surprise",
+    "connected-rehearsal": "Connected Rehearsal",
+  }[stage];
+}
+
 function IconArrow() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -424,6 +440,7 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
   const [betaIssue, setBetaIssue] = useState("none");
   const [betaComment, setBetaComment] = useState("");
   const [betaFeedbackSent, setBetaFeedbackSent] = useState(false);
+  const [personalMastery, setPersonalMastery] = useState<MasterySummary | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -496,6 +513,7 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
         const storedEvents = window.localStorage.getItem("hariltsaa-beta-events-v1");
         if (storedEvents) setBetaEvents(JSON.parse(storedEvents));
         setActivePractice(readActivePractice());
+        setPersonalMastery(buildMasterySummary(readPersonalPracticeState(TARGET_SKILL_ID)));
       } catch {
         // The experience still works if browser storage is unavailable.
       }
@@ -1851,6 +1869,38 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
             Нэг өдөрт нэг жижиг харилцааг илүү сайн хийхэд л төвлөр. Таны ахиц зөвхөн энэ төхөөрөмж дээр хадгалагдана.
           </p>
         </div>
+        {personalMastery && (
+          <article className="mastery-progress-card" aria-labelledby="mastery-progress-title">
+            <div className="mastery-progress-head">
+              <div>
+                <span>PERSONAL PRACTICE MASTERY</span>
+                <h3 id="mastery-progress-title">{personalMastery.targetSkillLabel}</h3>
+              </div>
+              <strong>{stageLabel(personalMastery.supportLevel)}</strong>
+            </div>
+            <div className="mastery-evidence">
+              <p><b>{personalMastery.distinctVariantCount}</b><span>өөр нөхцөлд утгатай давтсан</span></p>
+              <p>
+                <b>{personalMastery.confirmedAcrossDays ? "✓" : "—"}</b>
+                <span>{personalMastery.confirmedAcrossDays ? "өөр өдөр баталгаажсан" : "дараагийн өдрийн баталгаа хүлээгдэж байна"}</span>
+              </p>
+            </div>
+            <ul className="mastery-criteria">
+              {personalMastery.criteria.map((criterion) => (
+                <li key={criterion.id} className={criterion.stable ? "stable" : ""}>
+                  <i aria-hidden="true">{criterion.stable ? "✓" : criterion.variantCount}</i>
+                  <span><b>{criterion.label}</b><small>{criterion.stable ? "2 өөр нөхцөлд тогтвортой" : `${criterion.variantCount}/2 нөхцөлд нотолгоотой`}</small></span>
+                </li>
+              ))}
+            </ul>
+            <div className="mastery-next">
+              <span>ДАРААГИЙН АЛХАМ</span>
+              <p>{personalMastery.nextRecommendation}</p>
+              <Link href="/practice/personal">Personal Practice үргэлжлүүлэх</Link>
+            </div>
+            <small className="mastery-disclaimer">XP болон session-ийн тоо нь mastery-г дангаараа тодорхойлохгүй.</small>
+          </article>
+        )}
         <div className="progress-stats">
           <div><strong>{progress.sessions + arenaProgress.sessions}</strong><span>нийт session</span></div>
           <div><strong>{streak}</strong><span>өдрийн дараалал</span></div>

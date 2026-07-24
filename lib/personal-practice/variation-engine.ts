@@ -219,8 +219,13 @@ export function decideProgression(
 
 export function canUseLightSurprise(history: AttemptEvidence[]) {
   const recent = history.slice(-3);
-  if (recent.length < 3) return false;
-  return recent.every((item) =>
+  if (recent.some((item) =>
+    item.safeFinished ||
+    item.anxietyAfter >= 8 ||
+    item.anxietyAfter - item.anxietyBefore >= 2
+  )) return false;
+  const promptedEvidence = history.filter((item) =>
+    item.stage === "prompted" &&
     item.completed &&
     item.validAttempt === true &&
     (item.demonstratedCriteria ?? 0) >= 2 &&
@@ -228,6 +233,7 @@ export function canUseLightSurprise(history: AttemptEvidence[]) {
     item.anxietyAfter < 8 &&
     item.anxietyAfter <= item.anxietyBefore + 1
   );
+  return new Set(promptedEvidence.map((item) => item.variationId).filter(Boolean)).size >= 2;
 }
 
 export function safeStageForIntensity(stage: RehearsalStage, intensity: number): RehearsalStage {

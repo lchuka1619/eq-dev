@@ -21,6 +21,7 @@ import {
 } from "@/lib/personal-practice/persistence";
 import {
   TARGET_SKILL_ID,
+  canUseLightSurprise,
   createVariation,
   decideProgression,
   safeStageForIntensity,
@@ -120,6 +121,10 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
   const retryEvaluation = focusedRetry
     ? state.attempts.find((item) => item.id === focusedRetry.attemptId)?.evaluation
     : undefined;
+  const lightSurpriseReady = canUseLightSurprise(state.attempts.map((attempt) => ({
+    ...attempt,
+    variationId: attempt.variation.id,
+  })));
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -485,8 +490,15 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
           )}
           {state.stage === "independent" && (
             <label className="surprise-opt-in">
-              <input type="checkbox" checked={state.surpriseOptIn} onChange={(event) => setSurpriseOptIn(event.target.checked)} />
-              Тогтвортой болсны дараа нэг хөнгөн гэнэтийн хувилбар туршихыг зөвшөөрөх
+              <input
+                type="checkbox"
+                checked={state.surpriseOptIn}
+                disabled={!lightSurpriseReady}
+                onChange={(event) => setSurpriseOptIn(event.target.checked)}
+              />
+              {lightSurpriseReady
+                ? "Хоёр Prompted хувилбар батлагдсан. Нэг хөнгөн гэнэтийн хувилбар туршихыг зөвшөөрөх"
+                : "Light Surprise нээхийн өмнө хоёр өөр Prompted хувилбарт 2/3 шалгуур баталгаажуулна"}
             </label>
           )}
           {practiceContext && (
