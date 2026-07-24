@@ -112,7 +112,15 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete }
       setStep(route === "past_repair" ? "repair" : "media");
     };
     window.addEventListener("eq:start-personal-practice", startFromToday);
-    return () => window.removeEventListener("eq:start-personal-practice", startFromToday);
+    const initialRoute = new URLSearchParams(window.location.search).get("route");
+    const frame = window.requestAnimationFrame(() => {
+      if (initialRoute === "past_repair") setStep("repair");
+      if (initialRoute === "future_rehearsal") setStep("media");
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("eq:start-personal-practice", startFromToday);
+    };
   }, []);
 
   const saveState = (next: PersonalPracticeState) => {

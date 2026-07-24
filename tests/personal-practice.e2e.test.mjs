@@ -94,7 +94,23 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
       return nav && card ? Math.max(0, card.bottom - nav.top) : null;
     });
     assert.equal(mobileOverlap, 0);
+    assert.equal(await page.locator("#personal-practice-pilot").count(), 0);
+    assert.equal(await page.locator("#arena").count(), 0);
+    assert.equal(await page.locator("#voice-coach").count(), 0);
+    assert.equal(await page.locator("#practice").count(), 0);
+    assert.equal(await page.locator("#roleplay").count(), 0);
+    for (const path of [
+      "/practice/personal",
+      "/practice/arena",
+      "/practice/voice",
+      "/practice/daily",
+      "/practice/roleplay",
+    ]) {
+      assert.equal(await page.locator(`a[href="${path}"]`).count(), 1);
+    }
     await page.getByRole("button", { name: "Past Event Repair эхлэх" }).click();
+    await page.waitForURL(`${baseUrl}/practice/personal?route=past_repair`);
+    await page.getByRole("heading", { name: "Өмнөх эвентийн нэг жижиг мөчийг сонгоё" }).waitFor();
     await page.getByRole("button", { name: "Алгасаад үргэлжлүүлэх" }).click();
     await page.getByRole("img", { name: /Тайван хурлын өрөөнд/ }).waitFor();
     await page.getByRole("button", { name: "Орчны дууг сонсох" }).waitFor();
@@ -168,7 +184,7 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
       }));
       localStorage.removeItem("eq-connected-rehearsal-v1");
     });
-    await page.reload({ waitUntil: "networkidle" });
+    await page.goto(`${baseUrl}/practice/personal`, { waitUntil: "networkidle" });
 
     await page.getByRole("button", { name: "Өмнөх жижиг алхмаа эргэн харах" }).click();
     await page.getByRole("button", { name: "Тийм", exact: true }).click();

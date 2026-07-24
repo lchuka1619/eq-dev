@@ -16,6 +16,7 @@ type Props = {
   completedDays: number;
   streak: number;
   onDailyPractice: () => void;
+  onStartRoute?: (route: TodayRoute) => void;
 };
 
 const defaultReadiness: ReadinessCheck = {
@@ -42,7 +43,7 @@ const routeCopy: Record<TodayRoute, { title: string; reason: string; action: str
   },
 };
 
-export function TodayPracticeRouter({ dailyMinutes, completedDays, streak, onDailyPractice }: Props) {
+export function TodayPracticeRouter({ dailyMinutes, completedDays, streak, onDailyPractice, onStartRoute }: Props) {
   const { user, setSyncState } = useAuth();
   const [readiness, setReadiness] = useState(defaultReadiness);
   const [selectedRoute, setSelectedRoute] = useState<TodayRoute | null>(null);
@@ -119,6 +120,10 @@ export function TodayPracticeRouter({ dailyMinutes, completedDays, streak, onDai
   };
 
   const start = () => {
+    if (onStartRoute) {
+      onStartRoute(route);
+      return;
+    }
     if (route === "daily_skill_loop") {
       onDailyPractice();
       return;

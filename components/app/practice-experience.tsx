@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
 import { PersonalPracticePilot } from "@/components/personal-practice/personal-practice-pilot";
 import { TodayPracticeRouter } from "@/components/personal-practice/today-practice-router";
@@ -362,9 +364,10 @@ function IconClock() {
   );
 }
 
-export type PracticeExperienceView = "today" | "journey" | "progress";
+export type PracticeExperienceView = "today" | "journey" | "progress" | "personal" | "arena" | "voice" | "daily" | "roleplay";
 
 export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
+  const router = useRouter();
   const pastEventPilotEnabled = isPastEventPilotEnabled();
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [practiceOpen, setPracticeOpen] = useState(false);
@@ -1187,6 +1190,7 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
               completedDays={plan?.completions.length ?? 0}
               streak={streak}
               onDailyPractice={startTodayPractice}
+              onStartRoute={(route) => router.push(route === "daily_skill_loop" ? "/practice/daily" : `/practice/personal?route=${route}`)}
             />
           ) : <article className="featured-practice">
             <div>
@@ -1201,23 +1205,39 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
               </div>
             </div>
             <div className="today-actions">
-              <button className="primary-button light" onClick={startTodayPractice} disabled={planCompletedToday && plan?.status === "completed"}>
+              <button className="primary-button light" onClick={() => plan ? router.push("/practice/daily") : startTodayPractice()} disabled={planCompletedToday && plan?.status === "completed"}>
                 {planCompletedToday ? "Дахин давтах" : plan ? "Өнөөдрийн дасгалыг эхлүүлэх" : "Замаа үүсгэх"} <IconArrow />
               </button>
-              {plan && <button className="today-change" type="button" onClick={() => { chooseLesson((lessonIndex + 1) % microLessons.length); window.setTimeout(openVoiceCoach, 0); }}>Дасгалаа өөрчлөх</button>}
+              {plan && <button className="today-change" type="button" onClick={() => router.push("/practice/voice")}>Дасгалаа өөрчлөх</button>}
             </div>
           </article>}
         </div>
 
       </section>
+      <section className="today-library section-shell" aria-labelledby="today-library-title">
+        <div>
+          <p className="eyebrow">ӨӨР ДАСГАЛ СОНГОХ</p>
+          <h2 id="today-library-title">Өнөөдөрт тохирох богино замууд</h2>
+        </div>
+        <div className="today-library-grid">
+          <Link href="/practice/personal"><b>Personal Practice</b><span>Past repair ба varied rehearsal</span></Link>
+          <Link href="/practice/arena"><b>Ярианы талбар</b><span>Багийн өдрийн хоол</span></Link>
+          <Link href="/practice/voice"><b>AI дадлага</b><span>Сонсох, хариулах, retry</span></Link>
+          <Link href="/practice/daily"><b>Өдөр тутмын чадвар</b><span>3–10 минутын давталт</span></Link>
+          <Link href="/practice/roleplay"><b>Дүрд тоглох</b><span>Ажил, гэр бүл, хил хязгаар</span></Link>
+        </div>
+      </section>
+      </>
+      )}
 
-      {pastEventPilotEnabled && (
+      {view === "personal" && pastEventPilotEnabled && (
         <PersonalPracticePilot
           isDaySeven={plan?.currentDay === 7}
           onDaySevenComplete={(before, after) => { completeToday(before, after); }}
         />
       )}
 
+      {view === "arena" && (
       <section className="arena-section" id="arena">
         <div className="section-shell">
           <div className="section-heading arena-heading">
@@ -1440,7 +1460,9 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
           )}
         </div>
       </section>
+      )}
 
+      {view === "voice" && (
       <section className="voice-coach-section" id="voice-coach">
         <div className="section-shell">
           <div className="section-heading">
@@ -1547,7 +1569,9 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
           </div>
         </div>
       </section>
+      )}
 
+      {view === "daily" && (
       <section className="practice-section section-shell" id="practice">
         <div className="section-heading">
           <div>
@@ -1761,7 +1785,9 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
           </article>
         )}
       </section>
+      )}
 
+      {view === "roleplay" && (
       <section className="roleplay-section" id="roleplay">
         <div className="section-shell">
           <div className="section-heading inverse">
@@ -1789,7 +1815,6 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
           </div>
         </div>
       </section>
-      </>
       )}
 
       {view === "journey" && (
