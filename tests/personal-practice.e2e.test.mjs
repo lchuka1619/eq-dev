@@ -99,13 +99,22 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     assert.equal(await page.locator("#voice-coach").count(), 0);
     assert.equal(await page.locator("#practice").count(), 0);
     assert.equal(await page.locator("#roleplay").count(), 0);
-    for (const path of [
+    const alternativePaths = [
       "/practice/personal",
       "/practice/arena",
       "/practice/voice",
       "/practice/daily",
       "/practice/roleplay",
-    ]) {
+    ];
+    for (const path of alternativePaths) {
+      assert.equal(await page.locator(`a[href="${path}"]`).count(), 0);
+    }
+    const libraryToggle = page.getByRole("button", { name: /Өөр дасгал/ });
+    assert.equal(await libraryToggle.getAttribute("aria-expanded"), "false");
+    await libraryToggle.focus();
+    await page.keyboard.press("Enter");
+    assert.equal(await libraryToggle.getAttribute("aria-expanded"), "true");
+    for (const path of alternativePaths) {
       assert.equal(await page.locator(`a[href="${path}"]`).count(), 1);
     }
     await page.getByRole("link", { name: /Дүрд тоглох/ }).click();

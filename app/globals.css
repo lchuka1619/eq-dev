@@ -822,7 +822,14 @@ footer a { margin-left: auto; color: var(--teal); text-decoration: none; font-we
 .profile-grid h2 { color: var(--teal); }
 .profile-grid li { margin: 12px 0; color: var(--muted); line-height: 1.55; }
 .today-library { padding-top: 12px; padding-bottom: 90px; }
-.today-library h2 { margin: 6px 0 0; color: var(--teal); font-size: clamp(32px, 4vw, 48px); letter-spacing: -.045em; }
+.today-library-toggle { width: 100%; padding: 17px 20px; border: 1px solid var(--border); border-radius: 16px; background: rgba(255,255,255,.68); color: var(--teal); display: flex; align-items: center; justify-content: space-between; text-align: left; cursor: pointer; }
+.today-library-toggle span:first-child { display: grid; gap: 3px; }
+.today-library-toggle small { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.today-library-toggle b { font-size: 16px; }
+.today-library-toggle span:last-child { font-size: 24px; font-weight: 400; }
+.today-library-toggle:hover, .today-library-toggle:focus-visible { border-color: var(--teal-bright); background: #fff; }
+.today-library-panel { padding-top: 24px; }
+.today-library-panel > p { margin: 0; color: var(--muted); }
 .today-library-grid { margin-top: 28px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
 .today-library-grid a { min-height: 138px; padding: 20px; border: 1px solid var(--border); border-radius: 18px; background: #fff; color: var(--teal); text-decoration: none; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 8px 24px rgba(18,49,45,.05); transition: transform .2s, border-color .2s; }
 .today-library-grid a:hover, .today-library-grid a:focus-visible { border-color: var(--teal-bright); transform: translateY(-2px); }

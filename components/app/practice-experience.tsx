@@ -359,6 +359,7 @@ export type PracticeExperienceView = "today" | "journey" | "progress" | "arena" 
 export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
   const router = useRouter();
   const pastEventPilotEnabled = isPastEventPilotEnabled();
+  const [practiceLibraryOpen, setPracticeLibraryOpen] = useState(false);
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [practiceOpen, setPracticeOpen] = useState(false);
   const [practiceStep, setPracticeStep] = useState(0);
@@ -1194,17 +1195,28 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
 
       </section>
       <section className="today-library section-shell" aria-labelledby="today-library-title">
-        <div>
-          <p className="eyebrow">ӨӨР ДАСГАЛ СОНГОХ</p>
-          <h2 id="today-library-title">Өнөөдөрт тохирох богино замууд</h2>
-        </div>
-        <div className="today-library-grid">
-          <Link href="/practice/personal"><b>Personal Practice</b><span>Past repair ба varied rehearsal</span></Link>
-          <Link href="/practice/arena"><b>Ярианы талбар</b><span>Багийн өдрийн хоол</span></Link>
-          <Link href="/practice/voice"><b>AI дадлага</b><span>Сонсох, хариулах, retry</span></Link>
-          <Link href="/practice/daily"><b>Өдөр тутмын чадвар</b><span>3–10 минутын давталт</span></Link>
-          <Link href="/practice/roleplay"><b>Дүрд тоглох</b><span>Ажил, гэр бүл, хил хязгаар</span></Link>
-        </div>
+        <button
+          className="today-library-toggle"
+          type="button"
+          aria-expanded={practiceLibraryOpen}
+          aria-controls="today-library-options"
+          onClick={() => setPracticeLibraryOpen((current) => !current)}
+        >
+          <span><small>SECONDARY</small><b id="today-library-title">Өөр дасгал</b></span>
+          <span aria-hidden="true">{practiceLibraryOpen ? "−" : "+"}</span>
+        </button>
+        {practiceLibraryOpen && (
+          <div id="today-library-options" className="today-library-panel">
+            <p>Өнөөдрийн санал тохирохгүй бол өөр богино дасгал сонгож болно.</p>
+            <div className="today-library-grid">
+              <Link href="/practice/personal"><b>Personal Practice</b><span>Past repair ба varied rehearsal</span></Link>
+              <Link href="/practice/arena"><b>Ярианы талбар</b><span>Багийн өдрийн хоол</span></Link>
+              <Link href="/practice/voice"><b>AI дадлага</b><span>Сонсох, хариулах, retry</span></Link>
+              <Link href="/practice/daily"><b>Өдөр тутмын чадвар</b><span>3–10 минутын давталт</span></Link>
+              <Link href="/practice/roleplay"><b>Дүрд тоглох</b><span>Ажил, гэр бүл, хил хязгаар</span></Link>
+            </div>
+          </div>
+        )}
       </section>
       </>
       )}
