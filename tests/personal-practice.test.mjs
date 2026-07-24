@@ -15,6 +15,10 @@ import {
 } from "../lib/context-to-mastery/practice-context.ts";
 import { contextualizeVariation } from "../lib/context-to-mastery/context-scene.ts";
 import {
+  criterionImproved,
+  evaluatePracticeResponse,
+} from "../lib/context-to-mastery/skill-rubric.ts";
+import {
   TARGET_SKILL_ID,
   createVariation,
   decideProgression,
@@ -96,6 +100,36 @@ test("controlled variation is deterministic and changes at most two dimensions",
   assert.equal(first.targetSkillId, TARGET_SKILL_ID);
   assert.ok(first.changedDimensions.length >= 1);
   assert.ok(first.changedDimensions.length <= 2);
+});
+
+test("skill rubric evaluates positive, partial, empty, and unrelated responses", () => {
+  const complete = evaluatePracticeResponse(
+    "Таны хэлсэнтэй холбоод нэг жижиг туршилт хийе. Та юу гэж бодож байна?",
+  );
+  assert.equal(complete.validAttempt, true);
+  assert.deepEqual(complete.criteria.map((item) => item.evidence), ["present", "present", "present"]);
+
+  const partial = evaluatePracticeResponse("Таны хэлсэнтэй холбоод нэг санаа нэмье.");
+  assert.equal(partial.validAttempt, true);
+  assert.deepEqual(partial.criteria.map((item) => item.evidence), ["present", "present", "missing"]);
+  assert.equal(partial.improvementCriterionId, "leaves_room");
+
+  for (const invalid of ["", "asdf qwer zxcv", "Өнөөдөр бороо орж байна"]) {
+    const result = evaluatePracticeResponse(invalid);
+    assert.equal(result.validAttempt, false);
+    assert.ok(result.criteria.every((item) => item.evidence === "not_evaluable"));
+  }
+});
+
+test("focused retry keeps one improvement target and reports criterion change", () => {
+  const before = evaluatePracticeResponse("Таны хэлсэнтэй холбоод нэг санаа нэмье.");
+  const after = evaluatePracticeResponse(
+    "Таны хэлсэнтэй холбоод нэг санаа нэмье. Та юу гэж бодож байна?",
+  );
+  assert.equal(before.improvementCriterionId, "leaves_room");
+  assert.match(before.retryPrompt, /Scene-ээ хэвээр хадгалаад/);
+  assert.equal(criterionImproved(before, after, before.improvementCriterionId), true);
+  assert.equal(after.improvementCriterionId, "leaves_room");
 });
 
 test("context-to-scene transformation is deterministic and preserves the learning target", () => {
@@ -211,6 +245,8 @@ test("progression requires three stable attempts instead of one rating", () => {
     usedHint: false,
     anxietyBefore: 5,
     anxietyAfter: 4,
+    validAttempt: true,
+    demonstratedCriteria: 2,
   };
   assert.equal(decideProgression([{ ...stable, completedAt: "2026-07-23T10:00:00Z", variationId: "a" }], "guided").decision, "repeat");
   assert.deepEqual(decideProgression([
@@ -231,6 +267,8 @@ test("same-day repetition consolidates but does not progress mastery", () => {
     usedHint: false,
     anxietyBefore: 5,
     anxietyAfter: 4,
+    validAttempt: true,
+    demonstratedCriteria: 2,
   };
   assert.deepEqual(decideProgression([
     { ...stable, completedAt: "2026-07-24T09:00:00Z", variationId: "a" },
@@ -266,6 +304,8 @@ test("first stable attempt after progress is a consolidation", () => {
       decision: "progress",
       completedAt: "2026-07-23T10:00:00Z",
       variationId: "a",
+      validAttempt: true,
+      demonstratedCriteria: 2,
     },
     {
       stage: "prompted",
@@ -276,9 +316,29 @@ test("first stable attempt after progress is a consolidation", () => {
       anxietyAfter: 4,
       completedAt: "2026-07-24T10:00:00Z",
       variationId: "b",
+      validAttempt: true,
+      demonstratedCriteria: 2,
     },
   ], "prompted");
   assert.deepEqual(result, { decision: "consolidate", nextStage: "prompted" });
+});
+
+test("completion without valid rubric evidence cannot advance mastery", () => {
+  const invalid = {
+    stage: "guided",
+    completed: true,
+    validAttempt: false,
+    demonstratedCriteria: 0,
+    safeFinished: false,
+    usedHint: false,
+    anxietyBefore: 4,
+    anxietyAfter: 3,
+  };
+  assert.deepEqual(decideProgression([
+    { ...invalid, completedAt: "2026-07-22T10:00:00Z", variationId: "a" },
+    { ...invalid, completedAt: "2026-07-23T10:00:00Z", variationId: "b" },
+    { ...invalid, completedAt: "2026-07-24T10:00:00Z", variationId: "c" },
+  ], "guided"), { decision: "repeat", nextStage: "guided" });
 });
 
 test("Today router deterministically selects repair, future, or daily", () => {
@@ -349,6 +409,9 @@ test("repeating practice on the same date does not inflate plan day or streak in
 });
 
 test("cloud hydration restores stage, reflection, repair and bridge without response text", () => {
+  const cloudEvaluation = evaluatePracticeResponse(
+    "Таны хэлсэнтэй холбоод нэг жижиг туршилт хийе.",
+  );
   const local = {
     journeyId: "local-empty",
     targetSkillId: TARGET_SKILL_ID,
@@ -372,7 +435,15 @@ test("cloud hydration restores stage, reflection, repair and bridge without resp
     id: "cloud-journey",
     target_skill_id: TARGET_SKILL_ID,
     current_stage: "prompted",
-    state: { bridge_accepted: true },
+    state: {
+      bridge_accepted: true,
+      evaluations: {
+        "attempt-1": {
+          evaluation: cloudEvaluation,
+          focusedCriterionId: "leaves_room",
+        },
+      },
+    },
   }, [{
     id: "attempt-1",
     variation_id: "variant-1",
@@ -398,6 +469,10 @@ test("cloud hydration restores stage, reflection, repair and bridge without resp
   assert.equal(hydrated.stage, "prompted");
   assert.equal(hydrated.attempts[0].reflection, "Тайван эхэлж чадсан.");
   assert.equal(hydrated.attempts[0].response, "");
+  assert.deepEqual(hydrated.attempts[0].evaluation, cloudEvaluation);
+  assert.equal(hydrated.attempts[0].validAttempt, true);
+  assert.equal(hydrated.attempts[0].demonstratedCriteria, 2);
+  assert.equal(hydrated.attempts[0].focusedCriterionId, "leaves_room");
   assert.equal(hydrated.attempts[0].variation.renderer, "image_audio");
   assert.equal(hydrated.repair?.saveChoice, "cloud");
   assert.equal(hydrated.bridgeAccepted, true);

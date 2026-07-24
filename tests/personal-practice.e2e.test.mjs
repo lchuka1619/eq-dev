@@ -55,6 +55,8 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
             usedHint: false,
             anxietyBefore: 5,
             anxietyAfter: 4,
+            validAttempt: true,
+            demonstratedCriteria: 2,
             variation: { id: "prior-variant-a" },
             response: "",
             reflection: "",
@@ -69,6 +71,8 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
             usedHint: false,
             anxietyBefore: 5,
             anxietyAfter: 4,
+            validAttempt: true,
+            demonstratedCriteria: 2,
             variation: { id: "prior-variant-b" },
             response: "",
             reflection: "",
@@ -155,16 +159,26 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     await page.getByRole("button", { name: "Орчны дууг сонсох" }).waitFor();
     await page.getByRole("button", { name: "Энэ нөхцөлөөр үргэлжлүүлэх" }).click();
 
+    const guidedScene = await page.locator(".scene-line").innerText();
     await page.getByLabel("Таны хэлэх хариулт").fill(
-      "Таны хэлсэнтэй холбоод нэг санаа нэмье. Эхлээд жижиг туршилт хийж болох уу?",
+      "Таны хэлсэнтэй холбоод нэг санаа нэмье. Эхлээд жижиг туршилт хийе.",
     );
     await page.getByRole("button", { name: "Давталтыг дуусгах" }).click();
     await page.getByText("Сайн болсон").waitFor();
-    await page.getByText("Нэг сайжруулалт").waitFor();
+    await page.getByText("→ Нэг сайжруулалт", { exact: true }).waitFor();
+    await page.getByText(/Жишээ хувилбар/).waitFor();
 
     await assert.doesNotReject(() =>
       page.getByText("Дараагийн шат: Prompted.").waitFor({ state: "visible" }),
     );
+    await page.getByRole("button", { name: "Энэ нэг сайжруулалтыг дахин турших" }).click();
+    await page.getByText("Focused retry", { exact: true }).waitFor();
+    assert.equal(await page.locator(".scene-line").innerText(), guidedScene);
+    await page.getByLabel("Таны хэлэх хариулт").fill(
+      "Таны хэлсэнтэй холбоод нэг санаа нэмье. Эхлээд жижиг туршилт хийе. Та юу гэж бодож байна?",
+    );
+    await page.getByRole("button", { name: "Focused retry-г дуусгах" }).click();
+    await page.getByText("Focused retry дээр сонгосон шалгуур сайжирлаа.").waitFor();
     await page.getByRole("button", { name: "Өөр жижиг хувилбараар давтах" }).click();
     await assert.doesNotReject(() =>
       page.getByText("Prompted rehearsal").waitFor({ state: "visible" }),

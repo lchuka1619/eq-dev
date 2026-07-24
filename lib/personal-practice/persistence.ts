@@ -1,5 +1,6 @@
 import type { AttemptEvidence, ProgressDecision, RehearsalStage, Variation } from "./variation-engine";
 import type { PracticeContext } from "../context-to-mastery/practice-context";
+import type { PracticeEvaluation, SkillCriterionId } from "../context-to-mastery/skill-rubric";
 
 export const PERSONAL_PRACTICE_KEY = "eq-personal-practice-pilot-v1";
 
@@ -29,6 +30,10 @@ export type PersonalAttempt = AttemptEvidence & {
   reflection: string;
   decision: ProgressDecision;
   completedAt: string;
+  evaluation?: PracticeEvaluation;
+  retryOfAttemptId?: string;
+  focusedCriterionId?: SkillCriterionId;
+  criterionImproved?: boolean;
 };
 
 export type PersonalPracticeState = {

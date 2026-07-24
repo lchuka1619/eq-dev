@@ -37,6 +37,14 @@ export async function syncPersonalPractice(
         bridge_accepted: state.bridgeAccepted,
         surprise_opt_in: state.surpriseOptIn,
         context: state.context?.saveChoice === "cloud" ? state.context : undefined,
+        evaluations: Object.fromEntries(state.attempts
+          .filter((item) => item.evaluation)
+          .map((item) => [item.id, {
+            evaluation: item.evaluation,
+            retryOfAttemptId: item.retryOfAttemptId,
+            focusedCriterionId: item.focusedCriterionId,
+            criterionImproved: item.criterionImproved,
+          }])),
     },
   }, { onConflict: "id" });
   if (journeyError) return false;
@@ -85,6 +93,15 @@ export async function syncBridgeChoice(userId: string, state: PersonalPracticeSt
       attempt_count: state.attempts.length,
       bridge_accepted: accepted,
       surprise_opt_in: state.surpriseOptIn,
+      context: state.context?.saveChoice === "cloud" ? state.context : undefined,
+      evaluations: Object.fromEntries(state.attempts
+        .filter((item) => item.evaluation)
+        .map((item) => [item.id, {
+          evaluation: item.evaluation,
+          retryOfAttemptId: item.retryOfAttemptId,
+          focusedCriterionId: item.focusedCriterionId,
+          criterionImproved: item.criterionImproved,
+        }])),
     },
   }).eq("id", state.journeyId).eq("user_id", userId);
   return !error;

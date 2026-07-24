@@ -2,12 +2,25 @@ import type { PersonalAttempt, PersonalPracticeState, RepairDraft } from "./pers
 import { createVariation, type RehearsalStage } from "./variation-engine.ts";
 import type { SceneRenderer } from "./variation-engine.ts";
 import type { PracticeContext } from "../context-to-mastery/practice-context.ts";
+import type { PracticeEvaluation, SkillCriterionId } from "../context-to-mastery/skill-rubric.ts";
+
+type CloudEvaluationSnapshot = {
+  evaluation?: PracticeEvaluation;
+  retryOfAttemptId?: string;
+  focusedCriterionId?: SkillCriterionId;
+  criterionImproved?: boolean;
+};
 
 export type CloudJourney = {
   id: string;
   target_skill_id: string;
   current_stage: RehearsalStage;
-  state: { bridge_accepted?: boolean | null; surprise_opt_in?: boolean; context?: PracticeContext } | null;
+  state: {
+    bridge_accepted?: boolean | null;
+    surprise_opt_in?: boolean;
+    context?: PracticeContext;
+    evaluations?: Record<string, CloudEvaluationSnapshot>;
+  } | null;
 };
 
 export type CloudAttempt = {
@@ -58,6 +71,13 @@ export function mergeHydratedPersonalPractice(
     reflection: item.reflection ?? "",
     decision: item.decision,
     completedAt: item.completed_at,
+    evaluation: journey.state?.evaluations?.[item.id]?.evaluation,
+    retryOfAttemptId: journey.state?.evaluations?.[item.id]?.retryOfAttemptId,
+    focusedCriterionId: journey.state?.evaluations?.[item.id]?.focusedCriterionId,
+    criterionImproved: journey.state?.evaluations?.[item.id]?.criterionImproved,
+    validAttempt: journey.state?.evaluations?.[item.id]?.evaluation?.validAttempt ?? false,
+    demonstratedCriteria: journey.state?.evaluations?.[item.id]?.evaluation?.criteria
+      .filter((criterion) => criterion.evidence === "present").length ?? 0,
   }));
   const mergedAttempts = [...local.attempts, ...cloudAttempts]
     .filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index)

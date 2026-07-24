@@ -23,7 +23,6 @@ import {
   TARGET_SKILL_ID,
   createVariation,
   decideProgression,
-  evaluatePracticeResponse,
   safeStageForIntensity,
   type RehearsalStage,
   type SceneRenderer,
@@ -35,6 +34,12 @@ import {
   type PracticeContext,
 } from "@/lib/context-to-mastery/practice-context";
 import { contextualizeVariation } from "@/lib/context-to-mastery/context-scene";
+import {
+  criterionImproved,
+  demonstratedCriterionCount,
+  evaluatePracticeResponse,
+  type SkillCriterionId,
+} from "@/lib/context-to-mastery/skill-rubric";
 
 type Step = "intro" | "bridge-reflection" | "repair" | "future-context" | "media" | "practice" | "connected" | "result";
 
@@ -85,6 +90,10 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
   const [reflection, setReflection] = useState("");
   const [usedHint, setUsedHint] = useState(false);
   const [safeFinished, setSafeFinished] = useState(false);
+  const [focusedRetry, setFocusedRetry] = useState<{
+    attemptId: string;
+    criterionId: SkillCriterionId;
+  } | null>(null);
   const [mediaMode, setMediaMode] = useState<Extract<SceneRenderer, "text_voice" | "image_audio">>("image_audio");
   const [bridgeDidIt, setBridgeDidIt] = useState<boolean | null>(null);
   const [bridgeBefore, setBridgeBefore] = useState(4);
@@ -94,13 +103,23 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
   const hydratedUser = useRef<string | null>(null);
   const activeStage = safeStageForIntensity(state.stage, anxietyBefore);
   const variation = useMemo(
-    () => contextualizeVariation(
-      createVariation(state.journeyId, activeStage, state.attempts.length, mediaMode),
-      practiceContext,
-    ),
-    [activeStage, mediaMode, practiceContext, state.attempts.length, state.journeyId],
+    () => {
+      const retryVariation = focusedRetry
+        ? state.attempts.find((item) => item.id === focusedRetry.attemptId)?.variation
+        : null;
+      return retryVariation ?? contextualizeVariation(
+        createVariation(state.journeyId, activeStage, state.attempts.length, mediaMode),
+        practiceContext,
+      );
+    },
+    [activeStage, focusedRetry, mediaMode, practiceContext, state.attempts, state.journeyId],
   );
-  const feedback = useMemo(() => evaluatePracticeResponse(response), [response]);
+  const evaluation = useMemo(() => evaluatePracticeResponse(response), [response]);
+  const latestAttempt = state.attempts.at(-1);
+  const latestEvaluation = latestAttempt?.evaluation;
+  const retryEvaluation = focusedRetry
+    ? state.attempts.find((item) => item.id === focusedRetry.attemptId)?.evaluation
+    : undefined;
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -210,15 +229,22 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
 
   const finishAttempt = async (safe = false) => {
     const completedAt = new Date().toISOString();
+    const retrySource = focusedRetry
+      ? state.attempts.find((item) => item.id === focusedRetry.attemptId)
+      : undefined;
+    const validAttempt = !safe && evaluation.validAttempt;
+    const demonstratedCriteria = validAttempt ? demonstratedCriterionCount(evaluation) : 0;
     const evidence = {
       stage: activeStage,
-      completed: !safe && Boolean(response.trim()),
+      completed: validAttempt,
       safeFinished: safe,
       usedHint,
       anxietyBefore,
       anxietyAfter,
       completedAt,
       variationId: variation.id,
+      validAttempt,
+      demonstratedCriteria,
     };
     const history = state.attempts.map((item) => ({
       ...item,
@@ -235,6 +261,12 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
       reflection: reflection.trim(),
       decision: decision.decision,
       completedAt,
+      evaluation,
+      retryOfAttemptId: retrySource?.id,
+      focusedCriterionId: focusedRetry?.criterionId,
+      criterionImproved: retrySource?.evaluation && focusedRetry
+        ? criterionImproved(retrySource.evaluation, evaluation, focusedRetry.criterionId)
+        : undefined,
     };
     const next = {
       ...state,
@@ -242,6 +274,7 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
       attempts: [...state.attempts, attempt],
     };
     setSafeFinished(safe);
+    setFocusedRetry(null);
     saveState(next);
     setStep("result");
     if (user) {
@@ -252,6 +285,21 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
   };
 
   const repeat = () => {
+    setResponse("");
+    setReflection("");
+    setUsedHint(false);
+    setSafeFinished(false);
+    setFocusedRetry(null);
+    setAnxietyBefore(anxietyAfter);
+    setStep("practice");
+  };
+
+  const startFocusedRetry = () => {
+    if (!latestAttempt || !latestEvaluation) return;
+    setFocusedRetry({
+      attemptId: latestAttempt.id,
+      criterionId: latestEvaluation.improvementCriterionId,
+    });
     setResponse("");
     setReflection("");
     setUsedHint(false);
@@ -451,6 +499,12 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
           <div className="variation-meta">
             <span>{variation.environment}</span><span>{variation.character}</span><span>{variation.tone}</span>
           </div>
+          {focusedRetry && retryEvaluation && (
+            <div className="safe-recommendation" aria-live="polite">
+              <b>Focused retry</b>
+              <p>{retryEvaluation.retryPrompt}</p>
+            </div>
+          )}
           <p className="scene-line">{variation.openingLine}</p>
           {variation.complication !== "гэнэтийн зүйлгүй" && <p className="complication">{variation.complication}</p>}
           <div className="intensity-row">
@@ -470,7 +524,9 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
           </div>
           <div className="pilot-actions">
             <button type="button" className="text-button" onClick={() => void finishAttempt(true)}>Энд аюулгүй дуусгах</button>
-            <button type="button" className="primary-button" disabled={!response.trim()} onClick={() => void finishAttempt(false)}>Давталтыг дуусгах</button>
+            <button type="button" className="primary-button" disabled={!response.trim()} onClick={() => void finishAttempt(false)}>
+              {focusedRetry ? "Focused retry-г дуусгах" : "Давталтыг дуусгах"}
+            </button>
           </div>
         </article>
       )}
@@ -493,7 +549,11 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
       {step === "result" && (
         <article className="pilot-card pilot-result" aria-live="polite">
           <span className="complete-mark">{safeFinished ? "Ⅱ" : "✓"}</span>
-          <h3>{safeFinished ? "Энд зогссон нь зөв сонголт." : "Нэг утгатай давталт дууслаа."}</h3>
+          <h3>{safeFinished
+            ? "Энд зогссон нь зөв сонголт."
+            : latestEvaluation?.validAttempt
+              ? "Нэг утгатай давталт дууслаа."
+              : "Энэ оролдлогыг mastery-д тооцоогүй."}</h3>
           <p>{state.attempts.at(-1)?.decision === "pause"
             ? "Өнөөдөр энд амраад, дараа нь ижил эсвэл зөөлөн хувилбараас үргэлжлүүлнэ."
             : state.attempts.at(-1)?.decision === "consolidate"
@@ -503,12 +563,32 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
                 : `Дараагийн шат: ${stageLabels[state.stage]}.`}</p>
           {!safeFinished && (
             <div className="pilot-feedback">
-              <div className="feedback-line good"><b>✓ Сайн болсон</b><p>{feedback.positive}</p></div>
-              <div className="feedback-line improve"><b>→ Нэг сайжруулалт</b><p>{feedback.improve}</p></div>
+              {latestEvaluation?.validAttempt ? (
+                <>
+                  <div className="feedback-line good"><b>✓ Сайн болсон</b><p>{latestEvaluation.strength}</p></div>
+                  <div className="feedback-line improve">
+                    <b>→ Нэг сайжруулалт</b>
+                    <p>{latestEvaluation.improvement}</p>
+                    <p><b>Жишээ хувилбар:</b> “{latestEvaluation.examplePhrase}”</p>
+                  </div>
+                </>
+              ) : (
+                <div className="feedback-line improve">
+                  <b>Үнэлэхэд хангалтгүй байна</b>
+                  <p>{latestEvaluation?.improvement}</p>
+                </div>
+              )}
+              {latestAttempt?.retryOfAttemptId && (
+                <p className="safe-recommendation">
+                  {latestAttempt.criterionImproved
+                    ? "Focused retry дээр сонгосон шалгуур сайжирлаа."
+                    : "Сонгосон нэг шалгуурыг ижил scene дээр дахин тогтворжуулж болно."}
+                </p>
+              )}
             </div>
           )}
           <div className="result-stats"><span><b>{state.attempts.length}</b> нийт оролдлого</span><span><b>{anxietyBefore} → {anxietyAfter}</b> түгшүүр</span><span><b>{variation.changedDimensions.length}</b> өөрчилсөн хувьсагч</span></div>
-          {Math.max(anxietyBefore, anxietyAfter) < 8 && <div className="bridge-card">
+          {latestEvaluation?.validAttempt && Math.max(anxietyBefore, anxietyAfter) < 8 && <div className="bridge-card">
             <p className="eyebrow">OPTIONAL REAL-LIFE BRIDGE</p>
             <h4>Дараагийн уулзалтаас өмнө эхний нэг өгүүлбэрээ notes-д бичих үү?</h4>
             <p>Хэнд ч илгээх шаардлагагүй. Алгассан ч streak болон ахиц буурахгүй.</p>
@@ -516,7 +596,12 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
             <button type="button" className="text-button" onClick={() => void chooseBridge(false)}>Одоохондоо алгасах</button>
           </div>}
           <div className="pilot-actions">
-            <button type="button" className="primary-button" onClick={repeat}>Өөр жижиг хувилбараар давтах</button>
+            {!safeFinished && latestEvaluation && (
+              <button type="button" className="primary-button" onClick={startFocusedRetry}>
+                Энэ нэг сайжруулалтыг дахин турших
+              </button>
+            )}
+            <button type="button" className="secondary-button" onClick={repeat}>Өөр жижиг хувилбараар давтах</button>
             <button type="button" className="text-button" onClick={() => { onPracticeFinished?.(); setStep("intro"); }}>Дуусгах</button>
           </div>
         </article>
