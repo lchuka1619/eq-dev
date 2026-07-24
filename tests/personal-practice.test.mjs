@@ -30,12 +30,27 @@ import {
 
 test("auth destination allows only canonical app routes", () => {
   assert.equal(safeAuthDestination("/progress"), "/progress");
+  assert.equal(
+    safeAuthDestination("/practice/personal?route=future_rehearsal"),
+    "/practice/personal?route=future_rehearsal",
+  );
+  assert.equal(
+    safeAuthDestination("/practice/personal?route=daily_skill_loop"),
+    "/practice/personal?route=daily_skill_loop",
+  );
   assert.equal(safeAuthDestination("/today"), "/today");
   assert.equal(safeAuthDestination("https://evil.example"), "/today");
   assert.equal(safeAuthDestination("//evil.example"), "/today");
   assert.equal(safeAuthDestination("/auth/callback"), "/today");
   assert.equal(new URL(buildAuthCallbackUrl("https://eq-dev-xi.vercel.app", "/")).searchParams.get("next"), "/today");
   assert.equal(new URL(buildAuthCallbackUrl("https://eq-dev-xi.vercel.app", "/progress")).searchParams.get("next"), "/progress");
+  assert.equal(
+    new URL(buildAuthCallbackUrl(
+      "https://eq-dev-xi.vercel.app",
+      "/practice/personal?route=past_repair",
+    )).searchParams.get("next"),
+    "/practice/personal?route=past_repair",
+  );
 });
 
 test("active practice resume marker accepts only canonical Personal Practice routes", () => {
@@ -54,6 +69,9 @@ test("active practice resume marker accepts only canonical Personal Practice rou
     };
     writeActivePractice(active);
     assert.deepEqual(readActivePractice(), active);
+    const daily = { ...active, href: "/practice/personal?route=daily_skill_loop", label: "Daily Skill Loop" };
+    writeActivePractice(daily);
+    assert.deepEqual(readActivePractice(), daily);
     values.set("eq-active-practice-v1", JSON.stringify({ ...active, href: "https://evil.example" }));
     assert.equal(readActivePractice(), null);
     clearActivePractice();

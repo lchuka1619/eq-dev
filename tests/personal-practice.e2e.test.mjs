@@ -145,6 +145,12 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
       await page.getByLabel("Таны хэлэх хариулт").getAttribute("placeholder"),
       /Таны хэлсэнтэй холбоод нэг санаа нэмье/,
     );
+    await page.goto(`${baseUrl}/practice/personal?route=daily_skill_loop`, { waitUntil: "networkidle" });
+    await page.getByRole("img", { name: /Тайван хурлын өрөөнд/ }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: /Ойрын нөхцөлөө хоёр минутад бэлдье/ }).count(), 0);
+    await page.getByRole("button", { name: "Энэ нөхцөлөөр үргэлжлүүлэх" }).click();
+    await page.getByText("ӨДӨР ТУТМЫН НӨХЦӨЛ", { exact: true }).waitFor();
+    await page.getByText("Guided rehearsal").waitFor();
     await page.goto(`${baseUrl}/today`, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Past Event Repair эхлэх" }).click();
     await page.waitForURL(`${baseUrl}/practice/personal?route=past_repair`);
@@ -183,6 +189,13 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     await assert.doesNotReject(() =>
       page.getByText("Prompted rehearsal").waitFor({ state: "visible" }),
     );
+    await page.getByRole("button", { name: "Ⅱ Pause" }).click();
+    await page.getByText(/Түр зогслоо/).waitFor();
+    assert.equal(await page.getByLabel("Таны хэлэх хариулт").isDisabled(), true);
+    await page.getByRole("button", { name: "▶ Үргэлжлүүлэх" }).click();
+    assert.equal(await page.getByLabel("Таны хэлэх хариулт").isDisabled(), false);
+    await page.getByRole("button", { name: "↓ Нэг шат зөөлрүүлэх" }).click();
+    await page.getByText("Guided rehearsal").waitFor();
 
     const layout = await page.evaluate(() => {
       window.scrollTo(1000, window.scrollY);

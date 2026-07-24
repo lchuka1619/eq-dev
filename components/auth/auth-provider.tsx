@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (code) {
         const callbackUrl = new URL("/auth/callback", currentUrl.origin);
         callbackUrl.searchParams.set("code", code);
-        callbackUrl.searchParams.set("next", safeAuthDestination(currentUrl.pathname));
+        callbackUrl.searchParams.set("next", safeAuthDestination(`${currentUrl.pathname}${currentUrl.search}`));
         window.location.replace(callbackUrl);
         return;
       }

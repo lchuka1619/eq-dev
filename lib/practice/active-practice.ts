@@ -1,7 +1,10 @@
 export const ACTIVE_PRACTICE_KEY = "eq-active-practice-v1";
 
 export type ActivePractice = {
-  href: "/practice/personal?route=past_repair" | "/practice/personal?route=future_rehearsal";
+  href:
+    | "/practice/personal?route=past_repair"
+    | "/practice/personal?route=future_rehearsal"
+    | "/practice/personal?route=daily_skill_loop";
   label: string;
   startedAt: string;
 };
@@ -12,6 +15,7 @@ export function readActivePractice(): ActivePractice | null {
     if (!value || ![
       "/practice/personal?route=past_repair",
       "/practice/personal?route=future_rehearsal",
+      "/practice/personal?route=daily_skill_loop",
     ].includes(value.href)) return null;
     return value;
   } catch {

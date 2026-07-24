@@ -1227,13 +1227,13 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
               streak={streak}
               onDailyPractice={startTodayPractice}
               onStartRoute={(route) => {
-                if (route === "daily_skill_loop") {
-                  router.push("/practice/daily");
-                  return;
-                }
                 const active = {
                   href: `/practice/personal?route=${route}` as ActivePractice["href"],
-                  label: route === "past_repair" ? "Past Event Repair" : "Future Rehearsal",
+                  label: route === "past_repair"
+                    ? "Past Event Repair"
+                    : route === "future_rehearsal"
+                      ? "Future Rehearsal"
+                      : "Daily Skill Loop",
                   startedAt: new Date().toISOString(),
                 };
                 writeActivePractice(active);
