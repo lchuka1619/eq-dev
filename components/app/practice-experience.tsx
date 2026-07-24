@@ -61,20 +61,20 @@ type ArenaProgress = {
   history: ArenaSessionRecord[];
 };
 
-type RoleOption = {
+export type LegacyRoleOption = {
   label: string;
   feedback: string;
   helpful: boolean;
 };
 
-type Scenario = {
+export type LegacyScenario = {
   id: string;
   category: string;
   title: string;
   description: string;
   counterpart: string;
   prompt: string;
-  options: RoleOption[];
+  options: LegacyRoleOption[];
 };
 
 type ArenaBeat = {
@@ -113,7 +113,7 @@ const exercises = [
   },
 ];
 
-const scenarios: Scenario[] = [
+export const legacyScenarios: LegacyScenario[] = [
   {
     id: "work",
     category: "АЖЛЫН ХАРИЛЦАА",
@@ -354,16 +354,7 @@ function IconArrow() {
   );
 }
 
-function IconClock() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </svg>
-  );
-}
-
-export type PracticeExperienceView = "today" | "journey" | "progress" | "arena" | "voice" | "daily" | "roleplay";
+export type PracticeExperienceView = "today" | "journey" | "progress" | "arena" | "voice" | "daily";
 
 export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
   const router = useRouter();
@@ -377,8 +368,6 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
   const [reflection, setReflection] = useState("");
   const [progress, setProgress] = useState<Progress>(emptyProgress);
   const [localProgressHydrated, setLocalProgressHydrated] = useState(false);
-  const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null);
-  const [roleFeedback, setRoleFeedback] = useState<RoleOption | null>(null);
   const [videoId, setVideoId] = useState(defaultVideoId);
   const [videoInput, setVideoInput] = useState("");
   const [videoEditorOpen, setVideoEditorOpen] = useState(false);
@@ -520,15 +509,6 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [timerRunning, seconds]);
-
-  useEffect(() => {
-    if (!selectedScenario) return;
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedScenario(null);
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [selectedScenario]);
 
   const week = useMemo(() => {
     return Array.from({ length: 7 }, (_, index) => {
@@ -1779,36 +1759,6 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
       </section>
       )}
 
-      {view === "roleplay" && (
-      <section className="roleplay-section" id="roleplay">
-        <div className="section-shell">
-          <div className="section-heading inverse">
-            <div>
-              <p className="eyebrow">ДҮРД ТОГЛОЖ ДАДЛАГА ХИЙХ</p>
-              <h2>Хэлэхээсээ өмнө туршаад үз</h2>
-            </div>
-            <p>Хариулт бүрийн дараа богино тайлбар авч, өөр хувилбарыг аюулгүй орчинд туршина.</p>
-          </div>
-          <div className="scenario-grid">
-            {scenarios.map((scenario, index) => (
-              <button
-                className="scenario-card"
-                type="button"
-                key={scenario.id}
-                onClick={() => { setSelectedScenario(scenario); setRoleFeedback(null); }}
-              >
-                <span className={`scenario-number tone-${index + 1}`}>0{index + 1}</span>
-                <small>{scenario.category}</small>
-                <h3>{scenario.title}</h3>
-                <p>{scenario.description}</p>
-                <span className="scenario-meta"><IconClock /> 3–5 мин <IconArrow /></span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-      )}
-
       {view === "journey" && (
         <section className="journey-page section-shell" aria-labelledby="journey-title">
           <div className="section-heading">
@@ -1923,40 +1873,6 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
         <a href="/today">Өнөөдрийн дасгал</a>
       </footer>
 
-      {selectedScenario && (
-        <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setSelectedScenario(null);
-        }}>
-          <section className="role-dialog" role="dialog" aria-modal="true" aria-labelledby="role-title">
-            <button className="dialog-close" aria-label="Хаах" onClick={() => setSelectedScenario(null)}>×</button>
-            <p className="small-label">{selectedScenario.category}</p>
-            <h2 id="role-title">{selectedScenario.title}</h2>
-            <div className="speech counterpart">
-              <span>НӨГӨӨ ХҮН</span>
-              <p>{selectedScenario.counterpart}</p>
-            </div>
-            <h3>{selectedScenario.prompt}</h3>
-            <div className="role-options">
-              {selectedScenario.options.map((option) => (
-                <button
-                  type="button"
-                  className={roleFeedback === option ? (option.helpful ? "helpful" : "try-again") : ""}
-                  onClick={() => setRoleFeedback(option)}
-                  key={option.label}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            {roleFeedback && (
-              <div className={`coach-feedback ${roleFeedback.helpful ? "helpful" : "try-again"}`} aria-live="polite">
-                <b>{roleFeedback.helpful ? "Сайн сонголт" : "Өөрөөр туршаад үзье"}</b>
-                <p>{roleFeedback.feedback}</p>
-              </div>
-            )}
-          </section>
-        </div>
-      )}
     </main>
   );
 }

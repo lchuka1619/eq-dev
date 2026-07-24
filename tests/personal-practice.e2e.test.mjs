@@ -108,6 +108,17 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     ]) {
       assert.equal(await page.locator(`a[href="${path}"]`).count(), 1);
     }
+    await page.getByRole("link", { name: /Дүрд тоглох/ }).click();
+    await page.waitForURL(`${baseUrl}/practice/roleplay`);
+    await page.getByRole("heading", { name: "Хэлэхээсээ өмнө туршаад үз" }).waitFor();
+    await page.getByRole("button", { name: /Санал зөрөлдөөнийг тайван шийдэх/ }).click();
+    await page.getByRole("dialog", { name: "Санал зөрөлдөөнийг тайван шийдэх" }).waitFor();
+    await page.getByRole("button", { name: /Яагаад бодитой биш/ }).click();
+    await page.getByText("Сайн сонголт").waitFor();
+    await page.keyboard.press("Escape");
+    assert.equal(await page.getByRole("dialog").count(), 0);
+    await page.getByRole("link", { name: "← Өнөөдөр" }).click();
+    await page.waitForURL(`${baseUrl}/today`);
     await page.getByRole("button", { name: "Past Event Repair эхлэх" }).click();
     await page.waitForURL(`${baseUrl}/practice/personal?route=past_repair`);
     await page.getByRole("heading", { name: "Өмнөх эвентийн нэг жижиг мөчийг сонгоё" }).waitFor();
