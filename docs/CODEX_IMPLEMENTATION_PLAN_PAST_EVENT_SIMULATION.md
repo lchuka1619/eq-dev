@@ -1,12 +1,38 @@
-# Codex Implementation Plan — Past Event Repair + Varied Simulation
+# Codex Implementation Plan — App Shell + Past Event Simulation
 
 **Огноо:** 2026-07-24  
-**Сүүлийн шинэчлэлт:** 2026-07-24 — flow router, mastery engine, immersive-ready contract  
-**Зорилго:** Одоогийн Sprint 6-ийн 7 өдрийн хувийн замыг эвдэхгүйгээр нэг “Байгууллагын эвентэд тайван оролцох” pilot journey дээр Past Event Repair, controlled variation, graded media, optional real-life bridge-г ажиллуулах.
+**Сүүлийн шинэчлэлт:** 2026-07-24 — бодит `main` (`b73b056`) дээрх landing/app-shell gap болон auth routing-ийг тусгав
+**Зорилго:** Public landing ба Personal Practice app-ийг route түвшинд салгаж, login/guest/session restore бүрийн дараа хэрэглэгчийг practice-first урсгалд зөв оруулах; одоо байгаа 7 өдрийн plan, Today router, Past Event Repair, controlled variation, mastery, graded media, local + Supabase progress-ийг эвдэхгүй хадгалах.
 
-## 0. Codex-д өгөх үндсэн заавар
+## 0. Одоогийн кодын баталгаажсан baseline
 
-> Existing auth, local + Supabase progress, Today card, 7-day plan, streak protection, voice/text fallback, safety controls-ийг хадгал. Эхлээд repository-г inspect хийж бодит schema/component/API нэртэй нийцүүл. Том rewrite хийхгүй. Feature flag-ийн ард босоо slice байдлаар хэрэгжүүл. Raw audio default-аар бүү хадгал. Manager analytics-д transcript, exact response, fact/conclusion/reflection бүү гарга. Build, typecheck, lint, tests-ийг үе бүрийн төгсгөлд ажиллуул.
+2026-07-24-нд `lchuka1619/eq-dev` repository-ийн `main` branch, commit `b73b056`-г шалгасан.
+
+| Чадвар | Одоогийн төлөв |
+|---|---|
+| Supabase auth, local/cloud progress | Хэрэгжсэн |
+| 7 өдрийн plan, streak protection | Хэрэгжсэн |
+| Today readiness router | Хэрэгжсэн |
+| Past Event Repair pilot | Хэрэгжсэн |
+| Deterministic variation/mastery суурь | Хэрэгжсэн |
+| Static graded media | Хэрэгжсэн |
+| Public landing ба authenticated app route салгалт | **Хийгдээгүй** |
+| Login амжилтын дараах `/today` destination | **Хийгдээгүй** |
+| Personal Practice app shell + bottom navigation | **Хийгдээгүй** |
+
+Бодит шалтгаан:
+
+- `app/page.tsx` нь login төлвөөс үл хамааран ижил урт single-page landing/practice UI render хийдэг.
+- `AuthProvider` session-ийг state-д хадгалж, modal хаадаг боловч route солихгүй.
+- `AccountMenu`-д cloud-save товч avatar болохоос үндсэн дэлгэц солигдохгүй.
+- `app/auth/callback/route.ts`-ийн default destination `/`.
+- `/today`, `/journey`, `/progress`, `/profile` route болон app shell байхгүй.
+
+Иймээс дараагийн ажил нь Past Event feature нэмэхээс өмнөх **routing correction milestone** байна.
+
+## 1. Codex-д өгөх үндсэн заавар
+
+> Existing auth, local + Supabase progress, Today router, Past Event Repair, mastery/variation, graded media, 7-day plan, streak protection, voice/text fallback, safety controls-ийг хадгал. Public landing болон Personal Practice app shell-ийг route түвшинд салга. Том rewrite хийхгүй; одоогийн monolithic page-ийг зан төлөв өөрчлөхгүйгээр үе шаттай extract хий. Login, OAuth callback, magic link, guest mode, refresh, sign-out бүрд destination-ийг deterministic болго. Raw audio default-аар бүү хадгал. Build, lint, unit/integration/E2E tests-ийг төгсгөлд ажиллуул.
 
 Feature flag:
 
@@ -14,28 +40,123 @@ Feature flag:
 NEXT_PUBLIC_PAST_EVENT_PILOT=true
 ```
 
-## 1. Эхлэхийн өмнөх repository audit
+## 2. Нэн тэргүүний milestone — Public landing → Personal Practice app shell
+
+### 2.1 Route contract
+
+| Route | Хэн | Үндсэн үүрэг |
+|---|---|---|
+| `/` | Нэвтрээгүй шинэ visitor | Богино public landing: value proposition, `Дасгал эхлэх`, `Нэвтрэх` |
+| `/today` | Guest болон authenticated user | Practice-first home; эхний viewport-д нэг Today card |
+| `/journey` | Guest болон authenticated user | 7 өдрийн замнал |
+| `/progress` | Guest болон authenticated user | Streak, session, mastery/progress |
+| `/profile` | Guest болон authenticated user | Account, sync, privacy, sign-in/sign-out |
+| `/auth/callback` | Auth provider callback | Safe `next` resolve хийгээд зөв app destination руу буцаах |
+
+`/today` нь authenticated-only route биш. Guest хэрэглэгч дасгалаа local-first хийж чадна.
+
+### 2.2 Destination rules
+
+| Нөхцөл | Хүлээгдэж буй destination |
+|---|---|
+| Нэвтрээгүй хүн `/` нээх | Public landing |
+| `/` дээр `Дасгал эхлэх` дарах | `/today` guest mode |
+| `/` дээр login эхлүүлж амжилттай нэвтрэх | `/today` |
+| `/today`, `/journey`, `/progress`, `/profile` дээр login эхлүүлэх | Эхэлсэн safe internal route руугаа буцах |
+| Authenticated хэрэглэгч `/` нээх | `/today` |
+| `/today` дээр refresh хийх | `/today`; progress/session restore |
+| `/today` дээр sign out хийх | `/today` guest mode; practice хаагдахгүй |
+| Invalid/external `next` | `/today`; open redirect хийхгүй |
+| Auth error | Эхэлсэн safe route дээр non-blocking error; guest practice боломжтой |
+
+Session шалгаж байх үед landing болон app хоёрын хооронд content flash гаргахгүй. Боломжтой бол server-side session redirect ашиглана; runtime limitation байвал client guard + neutral loading state ашиглаж, regression test нэмнэ.
+
+### 2.3 Public landing requirements
+
+- Marketing үүрэгтэй, богино байна.
+- Hero дээр нэг value proposition, нэг primary CTA (`Дасгал эхлэх`), нэг secondary CTA (`Нэвтрэх`).
+- Authenticated хэрэглэгчийн Today card, readiness check, progress dashboard, Arena, Past Event UI-г `/` дээр render хийхгүй.
+- Public landing дотор anchor navigation-тай хуучин урт practice page үлдээхгүй.
+- Login амжилттай болсон эсэхийг зөвхөн avatar-аар таалгах UX бүү ашигла.
+
+### 2.4 Personal Practice app shell requirements
+
+- First viewport: app header + **нэг** recommended Today card.
+- Mobile-first bottom navigation:
+  - Өнөөдөр
+  - Замнал
+  - Ахиц
+  - Профайл
+- Active item route-аар ялгарна; keyboard focus болон `aria-current="page"` байна.
+- Desktop дээр ижил information architecture-г side/top navigation хэлбэрээр харуулж болно.
+- Marketing hero, public testimonials, урт тайлбар app shell дотор байхгүй.
+- Account/sync state нь Profile болон compact app header-ээс хүрдэг байна.
+- Existing practice components-ийн дотоод state, persistence key, Supabase table/schema-г энэ milestone-д өөрчлөхгүй.
+- Existing functionality-г `/today` болон холбогдох route-уудаас reachable хэвээр үлдээнэ; dead navigation бүү үүсгэ.
+
+### 2.5 Refactor constraints
+
+- `app/page.tsx`-ийн 1,900+ мөрийг нэг дор дахин бичихгүй.
+- Одоогийн practice experience-г reusable client component/layout руу extract хийж болно.
+- Route separation хийхдээ session completion, streak/day calculation, local storage key, cloud merge semantics-г өөрчлөхгүй.
+- Database migration шаардлагагүй. Schema өөрчлөх бол зогсоож, яагаад зайлшгүйг эхлээд тайлбарлана.
+- New state-management dependency нэмэхгүй.
+- Public landing/app shell салгалтыг Past Event feature flag-аас хамааралгүй ажиллуул.
+
+### 2.6 Acceptance tests
+
+Заавал шалгах:
+
+1. Anonymous `/` → landing; practice dashboard render хийхгүй.
+2. `Дасгал эхлэх` → `/today`; guest onboarding/practice ажиллана.
+3. Login from `/` → `/today`.
+4. Login from `/progress` → `/progress`.
+5. Authenticated direct visit `/` → `/today`.
+6. `/auth/callback?next=https://evil.example` → `/today`; external redirect үгүй.
+7. Refresh `/today` → current plan/progress restore.
+8. Sign out `/today` → guest mode; local practice үргэлжилнэ.
+9. Bottom navigation дөрвөн destination бүгд ажиллана, active state зөв.
+10. Existing Today router → Past Repair/Future Rehearsal/Daily Skill actions reachable.
+11. Repeat practice нь streak/day progress-ийг хиймлээр нэмэхгүй.
+12. Local + Supabase merge regression үгүй.
+13. iPhone Safari хэмжээтэй viewport-д CTA болон bottom nav давхцахгүй.
+14. Keyboard/focus/`aria-current` basic accessibility.
+
+### 2.7 Explicit non-goals
+
+- Энэ milestone-д B2B manager workspace хийхгүй.
+- Past Event/mastery algorithm дахин зохиохгүй.
+- POV video, 360°, VR runtime хийхгүй.
+- Visual redesign system бүхэлд нь солихгүй.
+- Commit, push, deploy-ийг хэрэглэгч тусад нь хүсээгүй бол хийхгүй.
+
+## 3. Эхлэхийн өмнөх repository audit
 
 ### Ажил
 
 - `AGENTS.md`, README, package scripts, route structure, Supabase migrations шалгах.
-- `app/page.tsx` дахь duplicate `voiceResponse` state асуудал байгаа эсэхийг батлах.
-- Current Sprint 6 flow: onboarding → Today → practice → result → persistence-г map хийх.
-- Existing analytics event helper, AI endpoint, STT/TTS wrapper, session schema-г тогтоох.
+- `app/page.tsx`, `AuthProvider`, `AuthModal`, `AccountMenu`, `/auth/callback`-ийн одоогийн behavior-г map хийх.
+- Existing flow: onboarding → Today router → practice/Past Repair → result → persistence-г map хийх.
+- Route refactor-т дахин ашиглах component/state boundary-г тогтоох.
 - Dirty working tree байвал user changes-г хадгалж, давхцах файлыг тэмдэглэх.
 
 ### Deliverable
 
-- `docs/past-event-pilot-baseline.md`
-- Өөрчлөх файлын бодит жагсаалт
+- Одоогийн route/auth state diagram эсвэл богино хүснэгт
+- Өөрчлөх файлын бодит жагсаалт, extraction boundary
 - Existing test/build baseline result
 
 ### Gate
 
 - Baseline build failure байвал эхлээд scope-д хамаарах blocker-ийг засна.
 - Repo олдохгүй, branch/remote тодорхойгүй бол код бичихээс өмнө зогсоно.
+- Auth session болон local/cloud merge semantics ойлгомжгүй бол mutation хийхээс өмнө тайлбарлана.
 
-## 2. Sprint 7A — Content contract ба deterministic variants
+## 4. Өмнөх pilot milestone-уудын лавлах төлөвлөгөө
+
+Доорх Past Event/variation/media хэсгүүдийн ихэнх нь `4c5e429` болон `b73b056` commit-уудад хэрэгжсэн. Routing milestone-ийн үеэр эдгээрийг дахин implementation scope болгохгүй; regression contract болгон ашиглана.
+
+### 4.1 Sprint 7A — Content contract ба deterministic variants
 
 ### Ажил
 
@@ -86,7 +207,7 @@ Repo-ийн бодит convention өөр бол түүнд нийцүүл.
 
 - UI-гүйгээр content contract болон selector tests green.
 
-## 3. Sprint 7B — Past Event Repair vertical slice
+### 4.2 Sprint 7B — Past Event Repair vertical slice
 
 ### Ажил
 
@@ -131,7 +252,7 @@ Repo-ийн бодит convention өөр бол түүнд нийцүүл.
 
 - Хэрэглэгч нэг өмнөх мөчийг сонгож, fact/conclusion салгаж, нэг repair response давтаж, result хүрнэ.
 
-## 4. Sprint 7C — Varied rehearsal
+### 4.3 Sprint 7C — Varied rehearsal
 
 ### Ажил
 
@@ -173,7 +294,7 @@ Repo-ийн бодит convention өөр бол түүнд нийцүүл.
 - Progress-ийн дараа → consolidate.
 - Repeat session нь streak/day progress-ийг хиймлээр нэмэхгүй.
 
-## 4A. Sprint 7C.1 — Today flow router
+### 4.4 Sprint 7C.1 — Today flow router
 
 ### Ажил
 
@@ -192,7 +313,7 @@ Repo-ийн бодит convention өөр бол түүнд нийцүүл.
 - Router нь гурван ижил primary CTA үүсгэхгүй.
 - Existing Sprint 6 хэрэглэгчийн Today path feature flag off үед өөрчлөгдөхгүй.
 
-## 5. Sprint 7D — Graded media
+### 4.5 Sprint 7D — Graded media
 
 ### MVP scope
 
@@ -227,7 +348,7 @@ Repo-ийн бодит convention өөр бол түүнд нийцүүл.
 - Зураг/аудио ачаалагдахгүй үед session тасрахгүй.
 - Media-г алгассан хэрэглэгч ижил practice-г text-only хийж чадна.
 
-## 6. Sprint 7E — Real-life bridge ба Day 7
+### 4.6 Sprint 7E — Real-life bridge ба Day 7
 
 ### Ажил
 
@@ -249,7 +370,7 @@ Repo-ийн бодит convention өөр бол түүнд нийцүүл.
 - Bridge skip streak-д нөлөөлөхгүй.
 - Day 7 нь бүх scene-г дэлгэрэнгүй давтахгүй, гол шийдвэрүүдээр явна.
 
-## 6A. Post-pilot R&D — Event recording → 360° → VR
+### 4.7 Post-pilot R&D — Event recording → 360° → VR
 
 Энэ хэсгийг Personal Pilot learning/safety metric батлагдсаны дараа л эхлүүлнэ.
 
@@ -267,7 +388,7 @@ Guardrails:
 - pause/exit/intensity down/2D fallback;
 - passive video watching-ийг practice completion гэж тооцохгүй.
 
-## 7. Analytics ба privacy
+## 5. Analytics ба privacy
 
 ### Events
 
@@ -321,7 +442,7 @@ Forbidden:
 - Day 2/Day 7 return
 - bridge offered/accepted/reflected
 
-## 8. Migration strategy
+## 6. Migration strategy
 
 - Additive migrations only.
 - Existing Sprint 6 sessions/plan progress-г өөрчлөхгүй.
@@ -330,7 +451,7 @@ Forbidden:
 - Migration rollback note бичих; destructive rollback ажиллуулахгүй.
 - Feature flag off үед current production flow яг хэвээр.
 
-## 9. QA matrix
+## 7. QA matrix
 
 | Area | Cases |
 |---|---|
@@ -342,24 +463,24 @@ Forbidden:
 | Persistence | guest local, auth sync, cross-device restore |
 | Privacy | user detail visible; manager raw detail hidden |
 | Accessibility | keyboard, focus, alt text, reduced motion, mute |
+| Routing | anonymous/authenticated `/`, safe callback, deep link, refresh, sign-out |
+| App shell | first viewport, active nav, mobile bottom inset, no landing content |
 
-## 10. Codex execution order
+## 8. Codex execution order
 
-1. Audit repo ба baseline report.
-2. Content contracts + tests.
-3. Past Event Repair vertical slice.
-4. Controlled variation.
-5. Today flow router + mastery engine.
-6. Static image + optional ambient audio.
-7. Real-life bridge + Day 7 connected rehearsal.
-8. Analytics/privacy verification.
-9. Full build/typecheck/lint/test.
-10. Manual mobile QA checklist.
-11. Feature-flagged preview deploy only after user explicitly requests deployment.
+1. Audit current repo, route/auth behavior, dirty state, baseline tests.
+2. Public landing ба reusable Personal Practice app boundary-г салгах.
+3. `/today` app shell + route-aware navigation хийх.
+4. `/journey`, `/progress`, `/profile` destination-уудыг dead screen үүсгэхгүй холбоно.
+5. Auth modal/callback/session restore destination contract хэрэгжүүлэх.
+6. Existing Today/Past Repair/mastery/media/persistence regression tests ажиллуулах.
+7. Full build/lint/test; тусдаа `typecheck` script байхгүй бол `tsc --noEmit` эсвэл build-ийн type validation-ийг тайлагнах.
+8. Manual mobile/auth matrix шалгах.
+9. Дараагийн milestone болгон Real-life bridge/Day 7-ийн үлдсэн ажлыг тусад нь тайлагнах.
 
 POV/360°/VR R&D нь дээрх pilot дууссан гэж тооцох шалгуур биш.
 
-## 11. Final verification command set
+## 9. Final verification command set
 
 Repo-ийн package manager-ийг lockfile-оос тогтоож, түүнд тохирсон command хэрэглэнэ. Жишээ:
 
@@ -372,18 +493,19 @@ npm run build
 
 Hard-coded `npm` бүү ашигла; `pnpm-lock.yaml` эсвэл `yarn.lock` байвал түүнд нийцүүл.
 
-## 12. Codex completion report format
+## 10. Codex completion report format
 
 ```text
 Outcome
-- Ямар user flow ажилладаг болсон
+- Public landing, guest start, auth return, app shell-ийн ямар flow ажилладаг болсон
 
 Changed
 - Файл/route/schema/API
 
 Verified
+- Anonymous/authenticated route matrix
 - Build/typecheck/lint/tests
-- Mobile/manual cases
+- Mobile/manual cases, deep link, refresh, sign-out
 
 Safety & privacy
 - Raw audio policy
