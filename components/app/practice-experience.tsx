@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
-import { PersonalPracticePilot } from "@/components/personal-practice/personal-practice-pilot";
 import { TodayPracticeRouter } from "@/components/personal-practice/today-practice-router";
 import { useCloudProgress } from "@/lib/progress/cloud-progress";
 import { useLearningPlan } from "@/lib/plan/cloud-plan";
@@ -364,7 +363,7 @@ function IconClock() {
   );
 }
 
-export type PracticeExperienceView = "today" | "journey" | "progress" | "personal" | "arena" | "voice" | "daily" | "roleplay";
+export type PracticeExperienceView = "today" | "journey" | "progress" | "arena" | "voice" | "daily" | "roleplay";
 
 export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
   const router = useRouter();
@@ -1228,13 +1227,6 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
         </div>
       </section>
       </>
-      )}
-
-      {view === "personal" && pastEventPilotEnabled && (
-        <PersonalPracticePilot
-          isDaySeven={plan?.currentDay === 7}
-          onDaySevenComplete={(before, after) => { completeToday(before, after); }}
-        />
       )}
 
       {view === "arena" && (
