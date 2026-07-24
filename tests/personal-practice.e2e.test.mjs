@@ -135,6 +135,12 @@ test("three stable Guided repetitions across dates progress the UI to Prompted o
     await page.getByRole("button", { name: "Хадгалахгүй үргэлжлүүлэх" }).click();
     await page.getByRole("img", { name: /Тайван хурлын өрөөнд/ }).waitFor();
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("eq-personal-practice-pilot-v1")).context), null);
+    await page.getByRole("button", { name: "Энэ нөхцөлөөр үргэлжлүүлэх" }).click();
+    await page.locator(".scene-line").getByText(/Хоёр хүн зэрэг ярьсны дараа санаагаа оруулах/).waitFor();
+    assert.match(
+      await page.getByLabel("Таны хэлэх хариулт").getAttribute("placeholder"),
+      /Таны хэлсэнтэй холбоод нэг санаа нэмье/,
+    );
     await page.goto(`${baseUrl}/today`, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Past Event Repair эхлэх" }).click();
     await page.waitForURL(`${baseUrl}/practice/personal?route=past_repair`);

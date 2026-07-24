@@ -34,6 +34,7 @@ import {
   type ContextSaveChoice,
   type PracticeContext,
 } from "@/lib/context-to-mastery/practice-context";
+import { contextualizeVariation } from "@/lib/context-to-mastery/context-scene";
 
 type Step = "intro" | "bridge-reflection" | "repair" | "future-context" | "media" | "practice" | "connected" | "result";
 
@@ -93,8 +94,11 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
   const hydratedUser = useRef<string | null>(null);
   const activeStage = safeStageForIntensity(state.stage, anxietyBefore);
   const variation = useMemo(
-    () => createVariation(state.journeyId, activeStage, state.attempts.length, mediaMode),
-    [activeStage, mediaMode, state.attempts.length, state.journeyId],
+    () => contextualizeVariation(
+      createVariation(state.journeyId, activeStage, state.attempts.length, mediaMode),
+      practiceContext,
+    ),
+    [activeStage, mediaMode, practiceContext, state.attempts.length, state.journeyId],
   );
   const feedback = useMemo(() => evaluatePracticeResponse(response), [response]);
 

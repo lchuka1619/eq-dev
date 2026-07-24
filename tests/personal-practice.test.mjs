@@ -13,6 +13,7 @@ import {
   dailySkillContext,
   normalizePracticeContext,
 } from "../lib/context-to-mastery/practice-context.ts";
+import { contextualizeVariation } from "../lib/context-to-mastery/context-scene.ts";
 import {
   TARGET_SKILL_ID,
   createVariation,
@@ -95,6 +96,72 @@ test("controlled variation is deterministic and changes at most two dimensions",
   assert.equal(first.targetSkillId, TARGET_SKILL_ID);
   assert.ok(first.changedDimensions.length >= 1);
   assert.ok(first.changedDimensions.length <= 2);
+});
+
+test("context-to-scene transformation is deterministic and preserves the learning target", () => {
+  const base = createVariation("context-seed", "prompted", 1);
+  const context = normalizePracticeContext({
+    entryRoute: "future_rehearsal",
+    eventType: "Байгууллагын ideation event",
+    peopleOrRoles: ["багийн ахлах"],
+    fearedMoment: "Хоёр хүн зэрэг ярьсны дараа санаагаа оруулах",
+    intendedOpening: "Таны хэлсэнтэй холбоод нэг санаа нэмье.",
+    saveChoice: "none",
+  });
+  const first = contextualizeVariation(base, context);
+  const second = contextualizeVariation(base, context);
+
+  assert.deepEqual(first, second);
+  assert.equal(first.targetSkillId, base.targetSkillId);
+  assert.equal(first.stage, base.stage);
+  assert.equal(first.renderer, base.renderer);
+  assert.deepEqual(first.decisionMoment, base.decisionMoment);
+  assert.deepEqual(first.changedDimensions, base.changedDimensions);
+  assert.match(first.openingLine, /Хоёр хүн зэрэг ярьсны дараа санаагаа оруулах/);
+  assert.equal(first.environment, "Байгууллагын ideation event");
+  assert.equal(first.character, "багийн ахлах");
+  assert.match(first.prompt, /Таны хэлсэнтэй холбоод нэг санаа нэмье/);
+});
+
+test("changing one context field changes its scene cue without changing controlled variation", () => {
+  const base = createVariation("context-change-seed", "guided", 0);
+  const common = {
+    entryRoute: "future_rehearsal",
+    eventType: "Багийн хурал",
+    peopleOrRoles: ["хамтрагч"],
+    intendedOpening: "Нэг санаа нэмье.",
+    saveChoice: "device",
+  };
+  const first = contextualizeVariation(base, { ...common, fearedMoment: "Эхний санааны дараа" });
+  const second = contextualizeVariation(base, { ...common, fearedMoment: "Асуулт ирсний дараа" });
+
+  assert.notEqual(first.openingLine, second.openingLine);
+  assert.equal(first.prompt, second.prompt);
+  assert.equal(first.targetSkillId, second.targetSkillId);
+  assert.equal(first.complication, second.complication);
+  assert.deepEqual(first.decisionMoment, second.decisionMoment);
+  assert.deepEqual(first.changedDimensions, second.changedDimensions);
+});
+
+test("Past repair facts shape the scene while a missing context leaves the variation intact", () => {
+  const base = createVariation("past-context-seed", "guided", 2);
+  const past = contextualizeVariation(base, {
+    entryRoute: "past_repair",
+    eventType: "Санаа боловсруулах уулзалт",
+    peopleOrRoles: ["төслийн ахлагч"],
+    decisiveMoment: "Миний өмнөх хүн ярьж дууссан",
+    observableFact: "Би гараа өргөсөн боловч үг хэлээгүй",
+    desiredAction: "Нэг холбоос хэлээд саналаа товч нэмэх",
+    saveChoice: "device",
+  });
+  const untouched = contextualizeVariation(base, null);
+
+  assert.equal(past.environment, "Санаа боловсруулах уулзалт");
+  assert.equal(past.character, "төслийн ахлагч");
+  assert.match(past.openingLine, /Миний өмнөх хүн ярьж дууссан/);
+  assert.match(past.prompt, /Нэг холбоос хэлээд саналаа товч нэмэх/);
+  assert.equal(past.targetSkillId, base.targetSkillId);
+  assert.deepEqual(untouched, { ...base, contextFieldsUsed: [] });
 });
 
 test("renderer changes presentation without changing the decision moment or skill", () => {
