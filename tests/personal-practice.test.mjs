@@ -19,6 +19,7 @@ import {
   evaluatePracticeResponse,
 } from "../lib/context-to-mastery/skill-rubric.ts";
 import { buildMasterySummary } from "../lib/context-to-mastery/mastery-summary.ts";
+import { sanitizeLearningProperties } from "../lib/analytics/learning-events.ts";
 import {
   TARGET_SKILL_ID,
   canUseLightSurprise,
@@ -418,6 +419,33 @@ test("mastery summary explains variants, criteria, and later-day confirmation wi
   assert.equal(summary.confirmedAcrossDays, true);
   assert.ok(summary.criteria.every((criterion) => criterion.stable));
   assert.match(summary.nextRecommendation, /Light Surprise/);
+});
+
+test("learning analytics drops free text and accepts only non-sensitive metadata", () => {
+  assert.deepEqual(sanitizeLearningProperties({
+    entry_route: "future_rehearsal",
+    target_skill_id: TARGET_SKILL_ID,
+    support_level: "prompted",
+    variant_id: "idea-entry.clear-contribution.v1:prompted:abc123",
+    criteria_present: 2,
+    valid_attempt: true,
+    feared_moment: "Хувийн үйл явдлын дэлгэрэнгүй",
+    transcript: "Хэрэглэгчийн яг хэлсэн үг",
+    reflection: "Хувийн тэмдэглэл",
+    people_or_roles: "Бодит хүний нэр",
+  }), {
+    entry_route: "future_rehearsal",
+    target_skill_id: TARGET_SKILL_ID,
+    support_level: "prompted",
+    variant_id: "idea-entry.clear-contribution.v1:prompted:abc123",
+    criteria_present: 2,
+    valid_attempt: true,
+  });
+  assert.deepEqual(sanitizeLearningProperties({
+    entry_route: "Хэрэглэгчийн оруулсан дурын текст",
+    target_skill_id: "contains spaces and personal detail",
+    support_level: "expert",
+  }), {});
 });
 
 test("Today router deterministically selects repair, future, or daily", () => {

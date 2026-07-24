@@ -41,6 +41,7 @@ import {
   evaluatePracticeResponse,
   type SkillCriterionId,
 } from "@/lib/context-to-mastery/skill-rubric";
+import { trackLearningEvent } from "@/lib/analytics/learning-events";
 
 type Step = "intro" | "bridge-reflection" | "repair" | "future-context" | "media" | "practice" | "connected" | "result";
 
@@ -209,6 +210,12 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
       repair: choice === "none" ? null : nextRepair,
     };
     saveState(next);
+    trackLearningEvent(choice === "none" ? "context_capture_skipped" : "context_capture_completed", {
+      entry_route: "past_repair",
+      target_skill_id: state.targetSkillId,
+      save_choice: choice,
+      has_context: Boolean(repair.fact.trim() || repair.conclusion.trim()),
+    });
     setStep("media");
   };
 
@@ -217,6 +224,12 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
     setFutureContext(context);
     setPracticeContext(context);
     saveState({ ...state, context: contextForStorage(context) });
+    trackLearningEvent("context_capture_completed", {
+      entry_route: "future_rehearsal",
+      target_skill_id: state.targetSkillId,
+      save_choice: choice,
+      has_context: Boolean(context.fearedMoment || context.intendedOpening),
+    });
     setAnxietyBefore(context.intensity ?? 4);
     setStep("media");
   };
@@ -234,13 +247,14 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
 
   const finishAttempt = async (safe = false) => {
     const completedAt = new Date().toISOString();
+    const attemptStage = focusedRetry ? variation.stage : activeStage;
     const retrySource = focusedRetry
       ? state.attempts.find((item) => item.id === focusedRetry.attemptId)
       : undefined;
     const validAttempt = !safe && evaluation.validAttempt;
     const demonstratedCriteria = validAttempt ? demonstratedCriterionCount(evaluation) : 0;
     const evidence = {
-      stage: activeStage,
+      stage: attemptStage,
       completed: validAttempt,
       safeFinished: safe,
       usedHint,
@@ -281,6 +295,56 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
     setSafeFinished(safe);
     setFocusedRetry(null);
     saveState(next);
+    trackLearningEvent("practice_attempt_submitted", {
+      entry_route: practiceContext?.entryRoute ?? "daily_skill_loop",
+      target_skill_id: state.targetSkillId,
+      support_level: attemptStage,
+      variant_id: variation.id,
+      changed_dimension_count: variation.changedDimensions.length,
+    });
+    trackLearningEvent("practice_attempt_validity", {
+      target_skill_id: state.targetSkillId,
+      support_level: attemptStage,
+      valid_attempt: validAttempt,
+    });
+    trackLearningEvent("rubric_evaluated", {
+      target_skill_id: state.targetSkillId,
+      evaluation_source: evaluation.source,
+      criteria_present: demonstratedCriteria,
+      valid_attempt: validAttempt,
+    });
+    trackLearningEvent("mastery_decision", {
+      target_skill_id: state.targetSkillId,
+      support_level: decision.nextStage,
+      decision: decision.decision,
+      valid_attempt: validAttempt,
+    });
+    if (safe) {
+      trackLearningEvent("safe_finish_used", {
+        target_skill_id: state.targetSkillId,
+        support_level: attemptStage,
+      });
+    }
+    if (focusedRetry) {
+      trackLearningEvent("focused_retry_completed", {
+        target_skill_id: state.targetSkillId,
+        support_level: attemptStage,
+        focused_criterion_id: focusedRetry.criterionId,
+        valid_attempt: validAttempt,
+      });
+    }
+    const wasConfirmedAcrossDays = new Set(state.attempts
+      .filter((item) => item.validAttempt)
+      .map((item) => item.completedAt.slice(0, 10))).size >= 2;
+    const confirmedAcrossDays = new Set(next.attempts
+      .filter((item) => item.validAttempt)
+      .map((item) => item.completedAt.slice(0, 10))).size >= 2;
+    if (!wasConfirmedAcrossDays && confirmedAcrossDays) {
+      trackLearningEvent("later_day_confirmation", {
+        target_skill_id: state.targetSkillId,
+        confirmed_across_days: true,
+      });
+    }
     setStep("result");
     if (user) {
       setSyncState("syncing");
@@ -297,6 +361,10 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
     setFocusedRetry(null);
     setAnxietyBefore(anxietyAfter);
     setStep("practice");
+    trackLearningEvent("controlled_variant_started", {
+      target_skill_id: state.targetSkillId,
+      support_level: state.stage,
+    });
   };
 
   const startFocusedRetry = () => {
@@ -311,6 +379,12 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
     setSafeFinished(false);
     setAnxietyBefore(anxietyAfter);
     setStep("practice");
+    trackLearningEvent("focused_retry_started", {
+      target_skill_id: state.targetSkillId,
+      support_level: latestAttempt.stage,
+      variant_id: latestAttempt.variation.id,
+      focused_criterion_id: latestEvaluation.improvementCriterionId,
+    });
   };
 
   const chooseBridge = async (accepted: boolean) => {
@@ -323,6 +397,10 @@ export function PersonalPracticePilot({ isDaySeven = false, onDaySevenComplete, 
     };
     const next = { ...state, bridgeAccepted: accepted, bridge };
     saveState(next);
+    trackLearningEvent("real_life_bridge_offered", {
+      target_skill_id: state.targetSkillId,
+      support_level: state.stage,
+    });
     if (user) {
       setSyncState("syncing");
       const [journeyOk, bridgeOk] = await Promise.all([

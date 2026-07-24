@@ -10,6 +10,8 @@ import {
   type ReadinessCheck,
   type TodayRoute,
 } from "@/lib/personal-practice/today-router";
+import { trackLearningEvent } from "@/lib/analytics/learning-events";
+import { TARGET_SKILL_ID } from "@/lib/personal-practice/variation-engine";
 
 type Props = {
   dailyMinutes: number;
@@ -49,6 +51,7 @@ export function TodayPracticeRouter({ dailyMinutes, completedDays, streak, onDai
   const [selectedRoute, setSelectedRoute] = useState<TodayRoute | null>(null);
   const [configured, setConfigured] = useState(false);
   const hydratedUser = useRef<string | null>(null);
+  const trackedRecommendation = useRef<string | null>(null);
   const automatic = useMemo(() => recommendTodayRoute(readiness), [readiness]);
   const route = selectedRoute ?? automatic.route;
   const recommendation = selectedRoute ? { route, ...routeCopy[route] } : automatic;
@@ -92,6 +95,15 @@ export function TodayPracticeRouter({ dailyMinutes, completedDays, streak, onDai
       });
   }, [user]);
 
+  useEffect(() => {
+    if (!configured || trackedRecommendation.current === route) return;
+    trackedRecommendation.current = route;
+    trackLearningEvent("today_recommendation_viewed", {
+      entry_route: route,
+      target_skill_id: TARGET_SKILL_ID,
+    });
+  }, [configured, route]);
+
   const persist = async (nextReadiness: ReadinessCheck, nextRoute: TodayRoute | null) => {
     writeTodayRouterState({ readiness: nextReadiness, selectedRoute: nextRoute });
     if (!user) return;
@@ -120,6 +132,10 @@ export function TodayPracticeRouter({ dailyMinutes, completedDays, streak, onDai
   };
 
   const start = () => {
+    trackLearningEvent("entry_route_selected", {
+      entry_route: route,
+      target_skill_id: TARGET_SKILL_ID,
+    });
     if (onStartRoute) {
       onStartRoute(route);
       return;

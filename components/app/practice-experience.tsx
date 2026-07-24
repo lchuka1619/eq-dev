@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
+import { useAuth } from "@/components/auth/auth-provider";
 import { TodayPracticeRouter } from "@/components/personal-practice/today-practice-router";
 import { useCloudProgress } from "@/lib/progress/cloud-progress";
 import { useLearningPlan } from "@/lib/plan/cloud-plan";
@@ -14,7 +15,11 @@ import {
   writeActivePractice,
   type ActivePractice,
 } from "@/lib/practice/active-practice";
-import { readPersonalPracticeState } from "@/lib/personal-practice/persistence";
+import {
+  readPersonalPracticeState,
+  writePersonalPracticeState,
+} from "@/lib/personal-practice/persistence";
+import { hydratePersonalPractice } from "@/lib/personal-practice/cloud-practice";
 import { TARGET_SKILL_ID } from "@/lib/personal-practice/variation-engine";
 import {
   buildMasterySummary,
@@ -379,6 +384,7 @@ export type PracticeExperienceView = "today" | "journey" | "progress" | "arena" 
 
 export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
   const router = useRouter();
+  const { user, setSyncState } = useAuth();
   const pastEventPilotEnabled = isPastEventPilotEnabled();
   const [practiceLibraryOpen, setPracticeLibraryOpen] = useState(false);
   const [activePractice, setActivePractice] = useState<ActivePractice | null>(null);
@@ -521,6 +527,19 @@ export function PracticeExperience({ view }: { view: PracticeExperienceView }) {
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (view !== "progress" || !localProgressHydrated || !user) return;
+    const local = readPersonalPracticeState(TARGET_SKILL_ID);
+    setSyncState("syncing");
+    void hydratePersonalPractice(user.id, local)
+      .then((hydrated) => {
+        writePersonalPracticeState(hydrated);
+        setPersonalMastery(buildMasterySummary(hydrated));
+        setSyncState("synced");
+      })
+      .catch(() => setSyncState("pending"));
+  }, [localProgressHydrated, setSyncState, user, view]);
 
   useEffect(() => {
     if (!timerRunning || seconds <= 0) return;
